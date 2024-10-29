@@ -10,7 +10,7 @@ Brief:
 import logging
 from random import choice
 import json
-from typing import Set, Dict, Generator, Tuple, AsyncGenerator
+from typing import Set, Dict, Generator, Tuple, AsyncGenerator, List
 import time
 import re
 import uuid
@@ -44,16 +44,22 @@ class Provider(object):
         logger.debug(f"headers: {headers}, url: {url}, body: {body}")
         return url, headers, body
     
-    def __stream_gen_common(self, line: bytes, g_dict: Dict) -> Tuple[str, bool]:
+    def __stream_gen_common(self, line: bytes, g_dict: Dict) -> Tuple[List[str], bool]:
         logger.debug(f"stream response line: {line}")
         line = line.decode("utf-8")    # type: str
-        line = self.parse_stream_chat_response(line, g_dict)
-        line = line.strip() + '\n'
-        if line.strip() == 'data: [DONE]':
-            has_done = True
-        else:
-            has_done = False
-        return line, has_done
+        lines = line.split('\n')
+        parsed_lines = []
+        has_done = False
+        for line in lines:
+            line = line.strip()
+            if len(line) == 0:
+                continue
+            parsed_line = self.parse_stream_chat_response(line, g_dict).strip()
+            if not has_done and parsed_line == 'data: [DONE]':
+                has_done = True
+            parsed_lines.append(parsed_line + '\n\n')
+
+        return parsed_lines, has_done
     
     def __to_stream_gen_common(self, response: ResponseProtocol) -> str:
         response_json = response.json()
@@ -87,11 +93,12 @@ class Provider(object):
                 g_dict = {}
                 with response as r:
                     for line in r.iter_lines():
-                        line, local_has_done = self.__stream_gen_common(line, g_dict)
+                        lines, local_has_done = self.__stream_gen_common(line, g_dict)
                         has_done = local_has_done if not has_done else has_done
-                        yield line
+                        for line in lines:
+                            yield line
                     if not has_done:
-                        yield "data: [DONE]\n"
+                        yield "data: [DONE]\n\n"
             return generate()
         else:
             response = self.parse_chat_response(response)
@@ -114,11 +121,12 @@ class Provider(object):
                 g_dict = {}
                 async with response as r:
                     async for line in r.aiter_lines():
-                        line, local_has_done = self.__stream_gen_common(line, g_dict)
+                        lines, local_has_done = self.__stream_gen_common(line, g_dict)
                         has_done = local_has_done if not has_done else has_done
-                        yield line
+                        for line in lines:
+                            yield line
                     if not has_done:
-                        yield "data: [DONE]\n"
+                        yield "data: [DONE]\n\n"
             return generate()
         else:
             response = self.parse_chat_response(response)
