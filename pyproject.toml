@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-proxypy"
+version = "0.0.1"
+authors = [
+    {name = "shlll", email = "shlll7347@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.7"
+description = "llm proxy server"
+dependencies = [
+    "pyjwt",
+    "pyyaml"
+]
+
+[project.optional-dependencies]
+requests = ["requests"]
+httpx = ["httpx"]
+aiohttp = ["aiohttp"]
+fastapi = ["fastapi"]
+flask = ["flask"]
+
+[tool.setuptools]
+packages = ["llm_proxy"]

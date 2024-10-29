@@ -14,7 +14,7 @@ import time
 import asyncio
 from random import choice
 from typing import Literal, Dict
-from utils import singleton, get_class
+from .utils import singleton, get_class
 from .sender import Response, Sender
 from .provider import Provider, g
 
@@ -23,11 +23,10 @@ logger = logging.getLogger()
 @singleton
 class LLMApi(object):
     def __init__(self):
-        self._initialized = False
+        self.initialized = False
         self._sender = None
 
-    def __get_models(self, get_nextchat_param: Literal[0, 1]) -> Dict:
-        nextchat_param = "-all"
+    def __get_models(self) -> Dict:
         response_body = {
             "object": "list",
             "data": [],
@@ -40,10 +39,6 @@ class LLMApi(object):
                 "created": int(time.time()),
                 "owned_by": "openai"
             })
-            if get_nextchat_param:
-                nextchat_param += f",+{model}@OpenAI"
-        if get_nextchat_param:
-            response_body["nextchat"] = nextchat_param
         return json.dumps(response_body, ensure_ascii=False)
 
     def __get_provider(self, request_body: Dict) -> Provider:
@@ -60,12 +55,12 @@ class LLMApi(object):
     @staticmethod
     def check_init(method):
         async def async_wrapper(self, *args, **kwargs):
-            if not self._initialized:
+            if not self.initialized:
                 raise Exception("LLMApi not initialized")
             return await method(self, *args, **kwargs)
         
         def sync_wrapper(self, *args, **kwargs):
-            if not self._initialized:
+            if not self.initialized:
                 raise Exception("LLMApi not initialized")
             return method(self, *args, **kwargs)
 
@@ -76,6 +71,7 @@ class LLMApi(object):
     
     def init(self, conf: Dict) -> None:
         self.conf = conf
+        self.secret = conf.get("secret", None)
         if self.conf.get("enable", False) == False:
             return
         
@@ -96,7 +92,7 @@ class LLMApi(object):
                     self.model_provider_dict[model].append(provider)
                 else:
                     self.model_provider_dict[model] = [provider]
-        self._initialized = True
+        self.initialized = True
         
     @check_init
     def chat(self, request_body: Dict) -> Response:        
@@ -122,10 +118,10 @@ class LLMApi(object):
             return Response(response.content, status_code=response.status_code, headers={"Content-Type": response.headers["Content-Type"]})
         
     @check_init
-    def models(self, get_nextchat_param: Literal[0, 1]) -> Response:
-        return Response(self.__get_models(get_nextchat_param), status_code=200, headers={"Content-Type": "application/json"})
+    def models(self) -> Response:
+        return Response(self.__get_models(), status_code=200, headers={"Content-Type": "application/json"})
     
     @check_init
-    def async_models(self, get_nextchat_param: Literal[0, 1]) -> Response:
-        return self.models(get_nextchat_param)
+    def async_models(self) -> Response:
+        return self.models()
     

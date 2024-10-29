@@ -13,8 +13,9 @@ from pathlib import Path
 import logging
 from logging import StreamHandler
 from logging.handlers import TimedRotatingFileHandler
+import yaml
 sys.path.append(str(Path(__file__).absolute().parent.parent))
-from llm_proxypy import auth, data, llm
+from llm_proxy import auth, data, llm
 
 logger = logging.getLogger()
 
@@ -48,22 +49,27 @@ def start_app(args):
     root_logger.addHandler(file_handler)
     logger.info('Server starting...')
 
-    # init LLMApi
-    llm.LLMApi().init(data.conf)
+    # 读取配置
+    with open(args.conf) as f:
+        conf = yaml.safe_load(f)
+    llm.LLMApi().init(conf)
+    secret = conf.get("secret", None)
+    if type(secret) is not str:
+        raise ValueError("token must be configured and should be a string")
 
     if args.debug_server:
         if args.framework == 'flask':
-            from llm_proxypy import flask_server
+            from llm_proxy import flask_server
             app = flask_server.run_app(args.host, args.port)
         else:
-            from llm_proxypy import fastapi_server
+            from llm_proxy import fastapi_server
             app = fastapi_server.run_app(args.host, args.port)
     else:
         if args.framework == 'flask':
-            from llm_proxypy import flask_server
+            from llm_proxy import flask_server
             app = flask_server.app
         else:
-            from llm_proxypy import fastapi_server
+            from llm_proxy import fastapi_server
             app = fastapi_server.app
     
     return app
@@ -76,6 +82,7 @@ if __name__ == '__main__':
     # server
     server_parser = cmd_parsers.add_parser('server', help='start server')
     server_parser.add_argument('--host', type=str, default='0.0.0.0', help='host')
+    server_parser.add_argument('--conf', type=str, default='conf/conf.yml', help='llm proxy server conf path')
     server_parser.add_argument('--port', type=int, default=8006, help='port')
     server_parser.add_argument('--no_debug_server', action='store_false', dest='debug_server', help='disable debug server')
     server_parser.add_argument('--framework', type=str, default='flask', choices=['flask','fastapi'],help='server framework')

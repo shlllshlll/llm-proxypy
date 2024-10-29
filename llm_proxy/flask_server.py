@@ -31,7 +31,7 @@ def check_token():
     auth_header = request.headers.get('Authorization')
     token = data.get_bearer_token(auth_header)
     
-    if auth.verify_token(token, data.secret) is False:
+    if auth.verify_token(token, LLMApi().secret) is False:
         return resp(data.ErrMsg.AUTH_ERROR, "Authorization failed"), 401
 
 @app.route("/v1/chat/completions", methods=['POST'])
