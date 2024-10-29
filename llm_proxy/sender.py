@@ -182,7 +182,7 @@ class AiohttpSender(Sender):
         if stream:
             return AiohttpSender.SyncStreamContext(self._session, url, headers, body)
         else:
-            return self._loop_context.loop.run_until_complete(self._async_post(url, headers, body))
+            return self._loop.run_until_complete(self._async_post(url, headers, body))
                 
     async def _async_post(self, url: str, headers: Dict, body: Dict) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
         async with self._session.post(url, headers=headers, json=body) as response:

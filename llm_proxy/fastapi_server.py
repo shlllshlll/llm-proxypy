@@ -7,7 +7,6 @@ Modified By: shlll(shlll7347@gmail.com)
 Brief: 
 """
 
-import logging
 import traceback
 from typing import Awaitable
 from fastapi import FastAPI, Request, status
@@ -33,7 +32,7 @@ async def check_token(request: Request, call_next: Awaitable[Request]):
     auth_header = request.headers.get('Authorization')
     token = data.get_bearer_token(auth_header)
 
-    if auth.verify_token(token, data.secret) is False:
+    if auth.verify_token(token, LLMApi().secret) is False:
         return resp(data.ErrMsg.AUTH_ERROR, "Authorization header missing or incorrect", status.HTTP_401_UNAUTHORIZED)
     response = await call_next(request)
     return response
@@ -51,8 +50,7 @@ async def chat(request: Request):
 
 @app.route("/v1/models", methods=['POST'])
 async def models(request: Request):
-    nextchat = request.query_params.get("nextchat", 0)
-    return convert_resonse(await LLMApi().async_models(nextchat))
+    return convert_resonse(await LLMApi().async_models())
 
 @app.route("/gen_token")
 def gen_token(secret: str = ''):
@@ -62,5 +60,5 @@ def gen_token(secret: str = ''):
 
 def run_app(host: str, port: int) -> FastAPI:
     if port > 0:
-        uvicorn.run("llm_proxypy.fastapi_server:app", host=host, port=port, reload=True)
+        uvicorn.run("llm_proxy.fastapi_server:app", host=host, port=port, reload=True)
     return app

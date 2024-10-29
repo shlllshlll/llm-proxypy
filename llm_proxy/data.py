@@ -7,22 +7,9 @@ Modified By: shlll(shlll7347@gmail.com)
 Brief: 
 """
 
-from typing import Dict
+from typing import Dict, Optional
 import logging
 from enum import Enum
-from pathlib import Path
-import yaml
-from .llm import LLMApi
-
-# 读取配置
-conf_dir = (Path(__file__).parent.parent / "conf").absolute()
-conf_file_path = conf_dir / "conf.yml"
-with open(conf_file_path) as f:
-    conf = yaml.safe_load(f)
-LLMApi().init(conf)
-secret = conf.get("secret", None)
-if type(secret) is not str:
-    raise ValueError("token must be configured and should be a string")
 
 class ErrMsg(Enum):
     OK = 0
