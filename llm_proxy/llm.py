@@ -72,11 +72,12 @@ class LLMApi(object):
     def init(self, conf: Dict) -> None:
         self.conf = conf
         self.secret = conf.get("secret", None)
+        request_timeout = conf.get("request_timeout", 60)
         if self.conf.get("enable", False) == False:
             return
         
         sender_name = self.conf.get("sender", "RequestsSender")
-        self._sender = get_class(Sender, sender_name)()
+        self._sender = get_class(Sender, sender_name)(request_timeout)
         
         self.model_provider_dict = {}   # type: dict[str, Provider]
         self.fallback_provider = None
