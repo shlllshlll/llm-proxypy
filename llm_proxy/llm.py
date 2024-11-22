@@ -13,8 +13,9 @@ import json
 import time
 import asyncio
 from random import choice
-from typing import Literal, Dict
-from .utils import singleton, get_class
+from typing import Dict
+from shutils import singleton
+from .utils import get_class
 from .sender import Response, Sender
 from .provider import Provider, g
 
@@ -58,7 +59,7 @@ class LLMApi(object):
             if not self.initialized:
                 raise Exception("LLMApi not initialized")
             return await method(self, *args, **kwargs)
-        
+
         def sync_wrapper(self, *args, **kwargs):
             if not self.initialized:
                 raise Exception("LLMApi not initialized")
@@ -68,22 +69,22 @@ class LLMApi(object):
             return async_wrapper
         else:
             return sync_wrapper
-    
-    def init(self, conf: Dict) -> None:
+
+    def init(self, conf: Dict, **kwargs) -> None:
         self.conf = conf
         self.secret = conf.get("secret", None)
         request_timeout = conf.get("request_timeout", 60)
         if self.conf.get("enable", False) == False:
             return
-        
+
         sender_name = self.conf.get("sender", "RequestsSender")
         self._sender = get_class(Sender, sender_name)(request_timeout)
-        
+
         self.model_provider_dict = {}   # type: dict[str, Provider]
         self.fallback_provider = None
         for provider_conf in self.conf["provider"]:
             provider_name = provider_conf["type"]
-            provider = get_class(Provider, provider_name)(provider_conf, self._sender)  # type: Provider
+            provider = get_class(Provider, provider_name)(provider_conf, self._sender, **kwargs)  # type: Provider
             if provider is None:
                 raise Exception(f"provider[{provider_conf['type']}] not found")
             if provider_name == "FallbackProvider":
@@ -94,9 +95,9 @@ class LLMApi(object):
                 else:
                     self.model_provider_dict[model] = [provider]
         self.initialized = True
-        
+
     @check_init
-    def chat(self, request_body: Dict) -> Response:        
+    def chat(self, request_body: Dict) -> Response:
         provider = self.__get_provider(request_body)
         response = provider.chat(request_body)
 
@@ -104,7 +105,7 @@ class LLMApi(object):
             return Response(response, headers={"Content-Type": "text/event-stream"})
         else:
             return Response(response.content, status_code=response.status_code, headers={"Content-Type": response.headers["Content-Type"]})
-        
+
     @check_init
     async def async_chat(self, request_body: Dict) -> Response:
         provider = self.__get_provider(request_body)
@@ -117,12 +118,11 @@ class LLMApi(object):
             return Response(response, headers={"Content-Type": "text/event-stream"})
         else:
             return Response(response.content, status_code=response.status_code, headers={"Content-Type": response.headers["Content-Type"]})
-        
+
     @check_init
     def models(self) -> Response:
         return Response(self.__get_models(), status_code=200, headers={"Content-Type": "application/json"})
-    
+
     @check_init
     def async_models(self) -> Response:
         return self.models()
-    

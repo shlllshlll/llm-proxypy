@@ -13,7 +13,8 @@ requires-python = ">=3.7"
 description = "llm proxy server"
 dependencies = [
     "pyjwt",
-    "pyyaml"
+    "pyyaml",
+    "shutilspy @ git+https://github.com/shlllshlll/shutilspy.git@master"
 ]
 
 [project.optional-dependencies]

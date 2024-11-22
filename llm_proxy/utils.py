@@ -4,29 +4,12 @@
 File: utils.py
 Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
-Brief: 
+Brief:
 """
 import inspect
 import asyncio
 from typing import Any, Type, Optional, Coroutine
-
-def singleton(cls):
-    instances = {}
-
-    def get_instances(*args, **kwargs):
-        if cls not in instances:
-            instances[cls] = cls(*args, **kwargs)
-        return instances[cls]
-    
-    return get_instances
-
-def static_vars(**kwargs):
-    """定义函数内静态变量的修饰器"""
-    def decorate(func):
-        for k in kwargs:
-            setattr(func, k, kwargs[k])
-        return func
-    return decorate
+from shutils import static_vars
 
 @static_vars(subclassdict={})
 def get_class(cls: Type[Any], name: str) -> Optional[object]:
@@ -35,7 +18,7 @@ def get_class(cls: Type[Any], name: str) -> Optional[object]:
         for subclass in subclasses.copy():
             subclasses.update(find_subclasses(subclass))
         return subclasses
-    
+
     if cls not in get_class.subclassdict:
         subclasses_set = find_subclasses(cls)
         subclasses_dict = {}
@@ -65,10 +48,9 @@ def get_event_loop():
             asyncio.set_event_loop(loop)
             get_event_loop.loop = loop
     return loop
-    
+
 def run_coro_in_loop(coro: Coroutine, loop: asyncio.AbstractEventLoop):
     if loop.is_running():
         loop.create_task(coro)
     else:
         loop.run_until_complete(coro)
-
