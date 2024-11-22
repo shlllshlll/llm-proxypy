@@ -4,19 +4,21 @@
 File: provider.py
 Author: shlll(shlll@baidu.com)
 Modified By: shlll(shlll@baidu.com)
-Brief: 
+Brief:
 """
 
 import logging
 from random import choice
 import json
-from typing import Set, Dict, Generator, Tuple, AsyncGenerator, List
+from typing import Set, Dict, Generator, Tuple, AsyncGenerator, List, TYPE_CHECKING, Optional, Any
 import time
 import re
 import uuid
 import threading
 from .utils import get_caller_class
 from .sender import ResponseProtocol, Sender, Response
+if TYPE_CHECKING:
+    from apscheduler.schedulers.base import BaseScheduler
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +28,10 @@ class LLMError(Exception):
     pass
 
 class Provider(object):
-    def __init__(self, conf: Dict, sender: Sender):
+    def __init__(self, conf: Dict, sender: Sender, scheduler: Optional["BaseScheduler"]):
         self._request_sender = sender
         self.conf = conf
+        self._schedular = scheduler
         self.models = set()
         for model in conf.get("models", []):
             self.models.add(model)
@@ -43,7 +46,7 @@ class Provider(object):
         url, headers, body = self.build_chat_request(request_body)
         logger.debug(f"headers: {headers}, url: {url}, body: {body}")
         return url, headers, body
-    
+
     def __stream_gen_common(self, line: bytes, g_dict: Dict) -> Tuple[List[str], bool]:
         logger.debug(f"stream response line: {line}")
         line = line.decode("utf-8")    # type: str
@@ -60,7 +63,7 @@ class Provider(object):
             parsed_lines.append(parsed_line + '\n\n')
 
         return parsed_lines, has_done
-    
+
     def __to_stream_gen_common(self, response: ResponseProtocol) -> str:
         response_json = response.json()
         response_json["object"] = "chat.completion.chunk"
@@ -81,7 +84,7 @@ class Provider(object):
     async def async_chat(self, request_body: Dict) -> ResponseProtocol | Generator[str, None, None]:
         url, headers, body = self.__chat_common(request_body)
         return await self.async_do_request(url, headers, body)
-    
+
     def do_request(self, url: str, headers: Dict, body: Dict) -> ResponseProtocol | Generator[str, None, None]:
         response = self._request_sender.post(url, headers=headers, body=body, stream=g.stream)
         if response.ok is False:
@@ -109,7 +112,7 @@ class Provider(object):
                 return generate()
             else:
                 return response
-    
+
     async def async_do_request(self, url: str, headers: Dict, body: Dict) -> ResponseProtocol | AsyncGenerator[str, None]:
         response = await self._request_sender.async_post(url, headers=headers, body=body, stream=g.stream)
         if response.ok is False:
@@ -159,16 +162,16 @@ class Provider(object):
 
     def parse_chat_response(self, response: ResponseProtocol) -> ResponseProtocol:
         return response
-    
+
     def parse_stream_chat_response(self, response: str, g_dict: Dict) -> str:
         return response
 
 class OpenAIProvider(Provider):
-    def __init__(self, conf: Dict, sender: Sender):
-        super().__init__(conf, sender)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         if not self.base_url:
             self.base_url = "https://api.openai.com/v1"
-    
+
     def build_chat_request(self, request_body: Dict) -> Tuple[str, Dict, Dict]:
         super().build_chat_request(request_body)
 
@@ -177,15 +180,15 @@ class OpenAIProvider(Provider):
             'Content-Type': 'application/json',
             'Authorization': f'Bearer {choice(self.token_list)}',
         }
-        
+
         return url, headers, request_body
 
 class GeminiProvider(Provider):
-    def __init__(self, conf: Dict, sender: Sender):
-        super().__init__(conf, sender)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         if not self.base_url:
             self.base_url = "https://generativelanguage.googleapis.com/v1beta/models"
-    
+
     def build_chat_request(self, request_body: Dict) -> Tuple[str, Dict, Dict]:
         super().build_chat_request(request_body)
 
@@ -299,7 +302,7 @@ class GeminiProvider(Provider):
 
 
         return url, headers, converted_body
-    
+
     def parse_chat_response(self, response: ResponseProtocol) -> ResponseProtocol:
         resp_json = response.json()
         converted_response = {
@@ -351,14 +354,14 @@ class GeminiProvider(Provider):
             else:
                 converted_message["content"] = ""
         return Response(json.dumps(converted_response, ensure_ascii=False).encode("utf8"), response.status_code, response.headers)
-    
+
     def parse_stream_chat_response(self, response: str, g_dict: Dict) -> str:
         response = response.strip()
         if response == "":
             return ""
         if response.startswith("data: "):
             response = response[len("data: "):]
-        
+
         resp_json = json.loads(response)
         if 'id' not in g_dict:
             g_dict["id"] = f"chatcmpl-{uuid.uuid4()}"
@@ -381,6 +384,107 @@ class GeminiProvider(Provider):
         }
 
         return f"data: {json.dumps(converted_response, ensure_ascii=False)}"
+
+class ErnieProvider(Provider):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        if not self.base_url:
+            self.base_url = "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat"
+        self.get_token()
+
+    def get_token(self):
+        def request_token(ak_sk_list: List[Tuple[str, str]]):
+            token_list = []
+            for ak, sk in ak_sk_list:
+                url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}"
+                headers = {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                }
+                resp = self._request_sender.post(url, headers, '""')
+                token_list.append(resp.json().get("access_token"))
+                logger.info(f"Ernie Provider: get token Success for ak={ak}, sk={sk}, token={token_list[-1]}")
+            return token_list
+
+        token_list = []
+        ak_sk_list: List[Tuple[str, str]] = []
+        for token_pair in self.token_list:
+            if type(token_pair) == str:
+                token_list.append(token_pair)
+                continue
+            ak, sk = token_pair
+            ak_sk_list.append((ak, sk))
+        if len(ak_sk_list) > 0:
+            token_list += request_token(ak_sk_list)
+            if self._schedular:
+                self._schedular.add_job(func=request_token, args=(ak_sk_list,), trigger="interval", days=29)
+        self.token_list = token_list
+
+    def build_chat_request(self, request_body: Dict) -> Tuple[str, Dict, Dict]:
+        super().build_chat_request(request_body)
+
+        url = f"{self.base_url}/{request_body["model"]}?access_token={choice(self.token_list)}"
+
+        headers = {
+            'Content-Type': 'application/json'
+        }
+
+        body = {}
+
+        messages = request_body.get("messages", [])
+        if len(messages) > 0 and messages[0].get("role") == "system":
+            system_message = messages[0]["content"]
+            body["system"] = system_message
+            del messages[0]
+        body["messages"] = messages
+        if "temperature" in request_body:
+            body["temperature"] = request_body["temperature"]
+        if "top_p" in request_body:
+            body["top_p"] = request_body["top_p"]
+        if "presence_penalty" in request_body:
+            body["penalty_score"] = request_body["presence_penalty"]
+        if "stream" in request_body:
+            body["stream"] = request_body["stream"]
+        if "stop"  in request_body:
+            body["stop"] = request_body["stop"]
+        if "max_tokens" in request_body:
+            body["max_output_tokens"] = request_body["max_tokens"]
+        if "max_completion_tokens" in request_body:
+            body["max_output_tokens"] = request_body["max_completion_tokens"]
+
+        return url, headers, body
+
+    def parse_chat_response(self, response: ResponseProtocol) -> ResponseProtocol:
+        resp_json = response.json()
+
+        converted_response = {
+            "created": resp_json["created"],
+            "id": resp_json["id"],
+            "model": g.model,
+            "object": resp_json["object"],
+            "usage": {
+                "completion_tokens": resp_json["usage"]["completion_tokens"],
+                "completion_tokens_details": {
+                    "reasoning_tokens": 0
+                },
+                "prompt_tokens": resp_json["usage"]["prompt_tokens"],
+                "total_tokens": resp_json["usage"]["total_tokens"],
+            },
+            "choices": [
+                {
+                    "index": 0,
+                    "message": {
+                        "role": "assistant",
+                        "content": resp_json["result"],
+                        "refusal": None
+                    },
+                    "logprobs": None,
+                    "finish_reason": "stop"
+                }
+            ]
+        }
+
+        return Response(json.dumps(converted_response, ensure_ascii=False), response.status_code, response.headers)
 
 class FallbackProvider(OpenAIProvider):
     pass
