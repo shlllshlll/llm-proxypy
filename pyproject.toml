@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-proxypy"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
     {name = "shlll", email = "shlll7347@gmail.com"}
 ]
@@ -14,7 +14,7 @@ description = "llm proxy server"
 dependencies = [
     "pyjwt",
     "pyyaml",
-    "shutilspy @ git+https://github.com/shlllshlll/shutilspy.git@master"
+    # "shutilspy @ git+https://github.com/shlllshlll/shutilspy.git@master"
 ]
 
 [project.optional-dependencies]
@@ -25,4 +25,4 @@ fastapi = ["fastapi"]
 flask = ["flask"]
 
 [tool.setuptools]
-packages = ["llm_proxy"]
+packages = ["llm_proxy", "llm_proxy.param"]
