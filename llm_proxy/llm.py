@@ -18,6 +18,7 @@ from shutils import singleton
 from .utils import get_class
 from .sender import Response, Sender
 from .provider import Provider, g
+from .param import openai as openai_param
 
 logger = logging.getLogger()
 
@@ -52,6 +53,18 @@ class LLMApi(object):
         if provider is None:
             raise Exception(f"no provider found for model {g.model}")
         return provider
+
+    def __handle_exception(self, exc: Exception):
+        logger.error(exc)
+        if g.ori_stream:
+            def error_gen(e: Exception):
+                resp = openai_param.StreamChatResponse.create(g.model, f"```json\n{e}\n```")
+                yield f'{resp.to_line()}\n\n'
+                yield f"{resp.end_line()}\n\n"
+            return Response(error_gen(exc), status_code=500, headers={"Content-Type": "text/event-stream"})
+        else:
+            resp = openai_param.ChatResponse.create(g.model, str(exc))
+            return Response(resp.to_json_str(), status_code=500, headers={"Content-Type": "application/json"})
 
     @staticmethod
     def check_init(method):
@@ -98,8 +111,13 @@ class LLMApi(object):
 
     @check_init
     def chat(self, request_body: Dict) -> Response:
-        provider = self.__get_provider(request_body)
-        response = provider.chat(request_body)
+        g.ori_stream = request_body.get("stream", False)
+
+        try:
+            provider = self.__get_provider(request_body)
+            response = provider.chat(request_body)
+        except Exception as e:
+            return self.__handle_exception(e)
 
         if inspect.isgenerator(response):
             return Response(response, headers={"Content-Type": "text/event-stream"})
@@ -108,8 +126,13 @@ class LLMApi(object):
 
     @check_init
     async def async_chat(self, request_body: Dict) -> Response:
-        provider = self.__get_provider(request_body)
-        response = await provider.async_chat(request_body)
+        g.ori_stream = request_body.get("stream", False)
+
+        try:
+            provider = self.__get_provider(request_body)
+            response = await provider.async_chat(request_body)
+        except Exception as e:
+            return self.__handle_exception(e)
 
         if isinstance(response, Response):
             return response

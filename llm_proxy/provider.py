@@ -17,6 +17,7 @@ import uuid
 import threading
 from .utils import get_caller_class
 from .sender import ResponseProtocol, Sender, Response
+from .param import openai as openai_param
 if TYPE_CHECKING:
     from apscheduler.schedulers.base import BaseScheduler
 
@@ -41,7 +42,6 @@ class Provider(object):
         self.modify = conf.get("modify", {})
 
     def __chat_common(self, request_body: Dict) -> Tuple[str, Dict, Dict]:
-        g.ori_stream = request_body.get("stream", False)
         g.stream = g.ori_stream
         url, headers, body = self.build_chat_request(request_body)
         logger.debug(f"headers: {headers}, url: {url}, body: {body}")
@@ -58,7 +58,7 @@ class Provider(object):
             if len(line) == 0:
                 continue
             parsed_line = self.parse_stream_chat_response(line, g_dict).strip()
-            if not has_done and parsed_line == 'data: [DONE]':
+            if not has_done and parsed_line == openai_param.StreamChatResponse.end_line():
                 has_done = True
             parsed_lines.append(parsed_line + '\n\n')
 
@@ -101,7 +101,7 @@ class Provider(object):
                         for line in lines:
                             yield line
                     if not has_done:
-                        yield "data: [DONE]\n\n"
+                        yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
             return generate()
         else:
             response = self.parse_chat_response(response)
@@ -129,7 +129,7 @@ class Provider(object):
                         for line in lines:
                             yield line
                     if not has_done:
-                        yield "data: [DONE]\n\n"
+                        yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
             return generate()
         else:
             response = self.parse_chat_response(response)
@@ -397,10 +397,7 @@ class ErnieProvider(Provider):
             token_list = []
             for ak, sk in ak_sk_list:
                 url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={ak}&client_secret={sk}"
-                headers = {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                }
+                headers = openai_param.gen_header(content_type_json=True, accept_json=True)
                 resp = self._request_sender.post(url, headers, '""')
                 token_list.append(resp.json().get("access_token"))
                 logger.info(f"Ernie Provider: get token Success for ak={ak}, sk={sk}, token={token_list[-1]}")
@@ -424,11 +421,8 @@ class ErnieProvider(Provider):
         super().build_chat_request(request_body)
 
         url = f"{self.base_url}/{request_body["model"]}?access_token={choice(self.token_list)}"
-
-        headers = {
-            'Content-Type': 'application/json'
-        }
-
+        headers = openai_param.gen_header(content_type_json=True)
+        # openai_request = openai_param.dict_to_dataclass()
         body = {}
 
         messages = request_body.get("messages", [])
@@ -457,34 +451,12 @@ class ErnieProvider(Provider):
     def parse_chat_response(self, response: ResponseProtocol) -> ResponseProtocol:
         resp_json = response.json()
 
-        converted_response = {
-            "created": resp_json["created"],
-            "id": resp_json["id"],
-            "model": g.model,
-            "object": resp_json["object"],
-            "usage": {
-                "completion_tokens": resp_json["usage"]["completion_tokens"],
-                "completion_tokens_details": {
-                    "reasoning_tokens": 0
-                },
-                "prompt_tokens": resp_json["usage"]["prompt_tokens"],
-                "total_tokens": resp_json["usage"]["total_tokens"],
-            },
-            "choices": [
-                {
-                    "index": 0,
-                    "message": {
-                        "role": "assistant",
-                        "content": resp_json["result"],
-                        "refusal": None
-                    },
-                    "logprobs": None,
-                    "finish_reason": "stop"
-                }
-            ]
-        }
+        converted_response = openai_param.ChatResponse.create(g.model, resp_json["result"], id=resp_json["id"], created=resp_json["created"])
+        converted_response.usage.completion_tokens = resp_json["usage"]["completion_tokens"]
+        converted_response.usage.prompt_tokens = resp_json["usage"]["prompt_tokens"]
+        converted_response.usage.total_tokens = resp_json["usage"]["total_tokens"]
 
-        return Response(json.dumps(converted_response, ensure_ascii=False), response.status_code, response.headers)
+        return Response(converted_response.to_json_str(), response.status_code, response.headers)
 
 class FallbackProvider(OpenAIProvider):
     pass
