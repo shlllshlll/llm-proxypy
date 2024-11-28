@@ -17,13 +17,12 @@ import uuid
 import threading
 from .utils import get_caller_class
 from .sender import ResponseProtocol, Sender, Response
+from .request_data import g
 from .param import openai as openai_param
 if TYPE_CHECKING:
     from apscheduler.schedulers.base import BaseScheduler
 
 logger = logging.getLogger(__name__)
-
-g = threading.local()
 
 class LLMError(Exception):
     pass
