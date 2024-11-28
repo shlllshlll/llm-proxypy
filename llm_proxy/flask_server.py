@@ -12,6 +12,7 @@ import traceback
 from flask import Flask, Response, request, jsonify
 from .llm import LLMApi
 from . import sender, data, auth
+from . import request_data
 
 app = Flask("llm-proxy")
 
@@ -26,13 +27,13 @@ def handle_error(error):
     traceback.print_exc()
     return resp(data.ErrMsg.UNKNOWN_ERROR, "Exception occurred", error=str(error)), 500
 
-@app.before_request
-def check_token():
-    auth_header = request.headers.get('Authorization')
-    token = data.get_bearer_token(auth_header)
+# @app.before_request
+# def check_token():
+#     auth_header = request.headers.get('Authorization')
+#     token = data.get_bearer_token(auth_header)
     
-    if auth.verify_token(token, LLMApi().secret) is False:
-        return resp(data.ErrMsg.AUTH_ERROR, "Authorization failed"), 401
+#     if auth.verify_token(token, LLMApi().secret) is False:
+#         return resp(data.ErrMsg.AUTH_ERROR, "Authorization failed"), 401
 
 @app.route("/v1/chat/completions", methods=['POST'])
 def chat():

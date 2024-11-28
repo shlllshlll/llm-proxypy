@@ -17,7 +17,8 @@ from typing import Dict
 from shutils import singleton
 from .utils import get_class
 from .sender import Response, Sender
-from .provider import Provider, g
+from .provider import Provider
+from .request_data import g
 from .param import openai as openai_param
 
 logger = logging.getLogger()
@@ -147,5 +148,5 @@ class LLMApi(object):
         return Response(self.__get_models(), status_code=200, headers={"Content-Type": "application/json"})
 
     @check_init
-    def async_models(self) -> Response:
+    async def async_models(self)  -> Response:
         return self.models()
