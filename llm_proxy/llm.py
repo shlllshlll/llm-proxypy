@@ -9,6 +9,7 @@ Brief: llm分发函数
 
 import logging
 import inspect
+import traceback
 import json
 import time
 import asyncio
@@ -23,6 +24,7 @@ from .param import openai as openai_param
 
 logger = logging.getLogger()
 
+
 @singleton
 class LLMApi(object):
     def __init__(self):
@@ -36,18 +38,22 @@ class LLMApi(object):
         }
 
         for model in sorted(LLMApi().model_provider_dict.keys()):
-            response_body["data"].append({
-                "id": model,
-                "object": "model",
-                "created": int(time.time()),
-                "owned_by": "openai"
-            })
+            response_body["data"].append(
+                {
+                    "id": model,
+                    "object": "model",
+                    "created": int(time.time()),
+                    "owned_by": "openai",
+                }
+            )
         return json.dumps(response_body, ensure_ascii=False)
 
     def __get_provider(self, request_body: Dict) -> Provider:
         g.model = request_body.get("model")
         if g.model not in self.model_provider_dict:
-            logger.warning(f"no provider found for model {g.model}, use fallback provider")
+            logger.warning(
+                f"no provider found for model {g.model}, use fallback provider"
+            )
             provider = self.fallback_provider
         else:
             provider = choice(self.model_provider_dict[g.model])
@@ -56,16 +62,28 @@ class LLMApi(object):
         return provider
 
     def __handle_exception(self, exc: Exception):
-        logger.error(exc)
+        logger.error(f"unexpected exception: {traceback.format_exc()}")
         if g.ori_stream:
+
             def error_gen(e: Exception):
-                resp = openai_param.StreamChatResponse.create(g.model, f"```json\n{e}\n```")
-                yield f'{resp.to_line()}\n\n'
+                resp = openai_param.StreamChatResponse.create(
+                    g.model, f"```json\n{e}\n```"
+                )
+                yield f"{resp.to_line()}\n\n"
                 yield f"{resp.end_line()}\n\n"
-            return Response(error_gen(exc), status_code=500, headers={"Content-Type": "text/event-stream"})
+
+            return Response(
+                error_gen(exc),
+                status_code=500,
+                headers={"Content-Type": "text/event-stream"},
+            )
         else:
             resp = openai_param.ChatResponse.create(g.model, str(exc))
-            return Response(resp.to_json_str(), status_code=500, headers={"Content-Type": "application/json"})
+            return Response(
+                resp.to_json_str(),
+                status_code=500,
+                headers={"Content-Type": "application/json"},
+            )
 
     @staticmethod
     def check_init(method):
@@ -94,11 +112,13 @@ class LLMApi(object):
         sender_name = self.conf.get("sender", "RequestsSender")
         self._sender = get_class(Sender, sender_name)(request_timeout)
 
-        self.model_provider_dict = {}   # type: dict[str, Provider]
+        self.model_provider_dict = {}  # type: dict[str, Provider]
         self.fallback_provider = None
         for provider_conf in self.conf["provider"]:
             provider_name = provider_conf["type"]
-            provider = get_class(Provider, provider_name)(provider_conf, self._sender, **kwargs)  # type: Provider
+            provider = get_class(Provider, provider_name)(
+                provider_conf, self._sender, **kwargs
+            )  # type: Provider
             if provider is None:
                 raise Exception(f"provider[{provider_conf['type']}] not found")
             if provider_name == "FallbackProvider":
@@ -123,7 +143,11 @@ class LLMApi(object):
         if inspect.isgenerator(response):
             return Response(response, headers={"Content-Type": "text/event-stream"})
         else:
-            return Response(response.content, status_code=response.status_code, headers={"Content-Type": response.headers["Content-Type"]})
+            return Response(
+                response.content,
+                status_code=response.status_code,
+                headers={"Content-Type": response.headers["Content-Type"]},
+            )
 
     @check_init
     async def async_chat(self, request_body: Dict) -> Response:
@@ -141,12 +165,20 @@ class LLMApi(object):
         if inspect.isasyncgen(response):
             return Response(response, headers={"Content-Type": "text/event-stream"})
         else:
-            return Response(response.content, status_code=response.status_code, headers={"Content-Type": response.headers["Content-Type"]})
+            return Response(
+                response.content,
+                status_code=response.status_code,
+                headers={"Content-Type": response.headers["Content-Type"]},
+            )
 
     @check_init
     def models(self) -> Response:
-        return Response(self.__get_models(), status_code=200, headers={"Content-Type": "application/json"})
+        return Response(
+            self.__get_models(),
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+        )
 
     @check_init
-    async def async_models(self)  -> Response:
+    async def async_models(self) -> Response:
         return self.models()
