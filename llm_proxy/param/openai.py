@@ -275,10 +275,9 @@ class ChatRequest(ParamMixin):
     @classmethod
     def create(cls, model: str, content: str, *args, **kwargs) -> Self:
         obj = cls(model, *args, **kwargs)
-        obj.messages = [
-            ChatRequest.UserMessage(content)
-        ]
+        obj.messages = [ChatRequest.UserMessage(content)]
         return obj
+
 
 @dataclass
 class StreamChatResponse(ParamMixin):
@@ -291,9 +290,9 @@ class StreamChatResponse(ParamMixin):
 
     @dataclass
     class Choice:
-        delta: List["StreamChatResponse.Delta"] = field(default_factory=list)
+        delta: Union["StreamChatResponse.Delta", dict] = field(default_factory=dict)
         logprobs = None
-        finish_reason: Optional[FinishReason] = FinishReason.stop
+        finish_reason: Optional[FinishReason] = None
         index: int = 0
 
     @dataclass
@@ -308,15 +307,18 @@ class StreamChatResponse(ParamMixin):
     created: int = field(default_factory=partial(gen, created=True))
     service_tier: OptionHidden[str] = HIDE
     system_fingerprint: str = field(default_factory=partial(gen, fp=True))
-    object: str = "chat.completion.chunked"
+    object: str = "chat.completion.chunk"
     usage: OptionHidden[Usage] = HIDE
 
     @classmethod
-    def create(cls, model: str, content: str, *args, **kwargs) -> Self:
+    def create(cls, model: str, content: str | None, *args, **kwargs) -> Self:
         obj = cls(model, *args, **kwargs)
-        obj.choices = [
-            StreamChatResponse.Choice(delta=[StreamChatResponse.Delta(content=content)])
-        ]
+        if content is None:
+            obj.choices = [StreamChatResponse.Choice(finish_reason=FinishReason.stop)]
+        else:
+            obj.choices = [
+                StreamChatResponse.Choice(delta=StreamChatResponse.Delta(content=content))
+            ]
         return obj
 
     def to_line(self) -> str:

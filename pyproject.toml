@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-proxypy"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
     {name = "shlll", email = "shlll7347@gmail.com"}
 ]
@@ -25,4 +25,4 @@ fastapi = ["fastapi"]
 flask = ["flask"]
 
 [tool.setuptools]
-packages = ["llm_proxy", "llm_proxy.param"]
+packages = ["llm_proxy", "llm_proxy.param", "llm_proxy.provider"]
