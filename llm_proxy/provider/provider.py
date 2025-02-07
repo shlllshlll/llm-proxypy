@@ -41,6 +41,7 @@ class Provider(object):
     ):
         self._request_sender = sender
         self.conf = conf
+        self.provider_config = conf.get("config", {})
         self._schedular = scheduler
         self.models = set()
         for model in conf.get("models", []):
@@ -49,6 +50,19 @@ class Provider(object):
         self.token_list = []
         self.token_list.extend(conf.get("tokens", []))
         self.modify = conf.get("modify", {})
+
+    def post_init(self):
+        model_prefix = self.provider_config.get("model_prefix", "")
+        if len(model_prefix) > 0:
+            self.nominal_models = set(model_prefix + model for model in self.models)
+        else:
+            self.nominal_models = self.models
+    
+    def get_real_model(self, model: str) -> str:
+        model_prefix = self.provider_config.get("model_prefix", "")
+        if len(model_prefix) > 0:
+            return model[len(model_prefix):]
+        return model
 
     def __chat_common(self, request_body: Dict) -> Tuple[str, Dict, Dict]:
         g.stream = g.ori_stream
@@ -89,7 +103,7 @@ class Provider(object):
         return line
 
     def get_models(self) -> Set[str]:
-        return self.models
+        return self.nominal_models
 
     def chat(self, request_body: Dict) -> ResponseProtocol | Generator[str, None, None]:
         url, headers, body = self.__chat_common(request_body)

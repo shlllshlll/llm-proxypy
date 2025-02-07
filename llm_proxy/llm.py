@@ -14,7 +14,7 @@ import json
 import time
 import asyncio
 from random import choice
-from typing import Dict
+from typing import Dict, List
 from shutils import singleton
 from .utils import get_class
 from .sender import Response, Sender
@@ -49,16 +49,17 @@ class LLMApi(object):
         return json.dumps(response_body, ensure_ascii=False)
 
     def __get_provider(self, request_body: Dict) -> Provider:
-        g.model = request_body.get("model")
-        if g.model not in self.model_provider_dict:
-            logger.warning(
-                f"no provider found for model {g.model}, use fallback provider"
-            )
-            provider = self.fallback_provider
-        else:
-            provider = choice(self.model_provider_dict[g.model])
+        model = request_body.get("model", "")
+        provider = None
+        if model in self.model_provider_dict:
+            provider = choice(self.model_provider_dict[model])
         if provider is None:
-            raise Exception(f"no provider found for model {g.model}")
+            logger.warning(
+                f"no provider found for model {model}"
+            )
+            raise Exception(f"no provider found for model {model}")
+        g.model = provider.get_real_model(model)
+        request_body["model"] = g.model
         return provider
 
     def __handle_exception(self, exc: Exception):
@@ -112,8 +113,7 @@ class LLMApi(object):
         sender_name = self.conf.get("sender", "RequestsSender")
         self._sender = get_class(Sender, sender_name)(request_timeout)
 
-        self.model_provider_dict = {}  # type: dict[str, Provider]
-        self.fallback_provider = None
+        self.model_provider_dict = {}  # type: dict[str, List[Provider]]
         for provider_conf in self.conf["provider"]:
             provider_name = provider_conf["type"]
             provider = get_class(Provider, provider_name)(
@@ -121,8 +121,7 @@ class LLMApi(object):
             )  # type: Provider
             if provider is None:
                 raise Exception(f"provider[{provider_conf['type']}] not found")
-            if provider_name == "FallbackProvider":
-                self.fallback_provider = provider
+            provider.post_init()
             for model in provider.get_models():
                 if model in self.model_provider_dict:
                     self.model_provider_dict[model].append(provider)
