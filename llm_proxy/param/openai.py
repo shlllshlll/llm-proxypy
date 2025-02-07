@@ -6,6 +6,7 @@ Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
 Brief:
 """
+from email.mime import audio
 import json
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Dict, Tuple, Self
@@ -52,6 +53,7 @@ class Role(Enum):
     system = "system"
     tool = "tool"
     function = "function"
+    developer = "developer"
 
 
 class ResponseRole(Enum):
@@ -70,7 +72,6 @@ class ToolCall:
     function: Function
     index: int = 0
     type: str = "function"
-
 
 @dataclass
 class ChatRequest(ParamMixin):
@@ -107,6 +108,12 @@ class ChatRequest(ParamMixin):
     class RefusalContentPart:
         type: str
         refusal: str
+
+    @dataclass
+    class DeveloperMessage:
+        content: str | List["ChatRequest.TextContentPart"]
+        role: Role = Role.developer
+        name: Hidden[str] = HIDE
 
     @dataclass
     class SystemMessage:
@@ -177,6 +184,7 @@ class ChatRequest(ParamMixin):
             coral = "coral"
             sage = "sage"
             verse = "verse"
+            alloy = "alloy"
             echo = "echo"
             shimmer = "shimmer"
 
@@ -243,7 +251,7 @@ class ChatRequest(ParamMixin):
 
     model: str
     messages: List[
-        "SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage"
+        "DeveloperMessage | SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage"
     ] = field(default_factory=list)
     store: OptionHidden[bool] = HIDE
     metadata: Hidden[Any] = HIDE
@@ -256,6 +264,7 @@ class ChatRequest(ParamMixin):
     n: OptionHidden[int] = HIDE
     modalities: OptionHidden[List[str]] = HIDE
     prediction: Hidden[Prediction] = HIDE
+    audio: OptionHidden[Audio] = HIDE
     presence_penalty: OptionHidden[float] = HIDE
     response_format: Hidden[ResponseFormat] = HIDE
     seed: OptionHidden[int] = HIDE
@@ -336,11 +345,19 @@ class StreamChatResponse(ParamMixin):
 @dataclass
 class ChatResponse(ParamMixin):
     @dataclass
+    class Audio:
+        id: str
+        expires_at: int
+        data: str
+        transcript: str
+
+    @dataclass
     class Message:
         content: str
         refusal: Optional[str] = None
         tool_calls: Hidden[List[ToolCall]] = HIDE
         role: str = "assistant"
+        audio: Hidden["ChatResponse.Audio"] = HIDE
 
     @dataclass
     class Choice:

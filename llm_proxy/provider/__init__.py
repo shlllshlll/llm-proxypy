@@ -12,6 +12,5 @@ Brief:
 
 from .provider import Provider
 from .ernie_provider import ErnieProvider
-from .fallback_provider import FallbackProvider
 from .gemini_provider import GeminiProvider
 from .openai_provider import OpenAIProvider
