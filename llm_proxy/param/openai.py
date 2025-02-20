@@ -293,6 +293,7 @@ class StreamChatResponse(ParamMixin):
     @dataclass
     class Delta:
         content: OptionHidden[str] = ""
+        reasoning_content: Hidden[str] = HIDE
         function_call: OptionHidden[Function] = HIDE
         role: OptionHidden[ResponseRole] = ResponseRole.assistant
         refusal: OptionHidden[str] = None
@@ -355,6 +356,7 @@ class ChatResponse(ParamMixin):
     @dataclass
     class Message:
         content: str
+        reasoning_content: Hidden[str] = HIDE
         refusal: Optional[str] = None
         tool_calls: Hidden[List[ToolCall]] = HIDE
         role: str = "assistant"
