@@ -6,8 +6,6 @@ Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
 Brief:
 """
-from email.mime import audio
-import json
 from dataclasses import dataclass, field
 from typing import Any, List, Optional, Dict, Tuple, Self
 import uuid
@@ -72,6 +70,7 @@ class ToolCall:
     function: Function
     index: int = 0
     type: str = "function"
+
 
 @dataclass
 class ChatRequest(ParamMixin):
@@ -328,7 +327,9 @@ class StreamChatResponse(ParamMixin):
             obj.choices = [StreamChatResponse.Choice(finish_reason=FinishReason.stop)]
         else:
             obj.choices = [
-                StreamChatResponse.Choice(delta=StreamChatResponse.Delta(content=content))
+                StreamChatResponse.Choice(
+                    delta=StreamChatResponse.Delta(content=content)
+                )
             ]
         return obj
 

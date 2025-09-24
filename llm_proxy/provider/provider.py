@@ -20,7 +20,7 @@ from typing import (
     TYPE_CHECKING,
     Optional,
 )
-from ..utils import get_caller_class
+from shutils import get_caller_class
 from ..sender import ResponseProtocol, Sender
 from ..request_data import g
 from ..param import openai as openai_param

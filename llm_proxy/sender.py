@@ -25,7 +25,7 @@ from typing import (
 )
 from dataclasses import dataclass, field
 import asyncio
-from .utils import get_caller_class, get_event_loop, run_coro_in_loop
+from .utils import get_event_loop, run_coro_in_loop
 
 if TYPE_CHECKING:
     import requests
