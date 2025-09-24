@@ -22,13 +22,20 @@ class OpenAIProvider(Provider):
             self.base_url = "https://api.openai.com/v1"
         models_from_api = self.provider_config.get("models_from_api", False)
         if models_from_api:
-            model_url = self.base_url + "/models"
+            if isinstance(models_from_api, str):
+                model_url = models_from_api
+            else:
+                model_url = self.base_url + "/models"
             response = self._request_sender.get(model_url, headers=self.__get_headers())
             if response.status_code != 200:
                 raise Exception(f"Failed to get models from {model_url}")
             models = response.json()
-            self.models = set(model["id"] for model in models["data"])
-    
+            if type(models) is list:
+                models_data = models
+            else:
+                models_data = models.get("data", [])
+            self.models = set(model["id"] for model in models_data)
+
     def __get_headers(self):
         return {
             "Content-Type": "application/json",

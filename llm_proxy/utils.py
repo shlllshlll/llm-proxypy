@@ -33,9 +33,6 @@ def get_class(cls: Type[Any], name: str) -> Optional[object]:
     else:
         return None
 
-def get_caller_class():
-    return inspect.stack()[1].frame.f_locals.get('self', None).__class__
-
 @static_vars(loop=None)
 def get_event_loop():
     try:

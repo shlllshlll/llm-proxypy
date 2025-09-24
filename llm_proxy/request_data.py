@@ -3,11 +3,11 @@
 """
 File: request_data.py
 Date: 2024/11/28 01:31:33
-Author: shihaolei(shihaolei@baidu.com)
-Modified By: shihaolei(shihaolei@baidu.com)
+Author: shlll(shlll7347@gmail.com)
+Modified By: shlll(shlll7347@gmail.com)
 Last Modified: 2024/11/28 01:31:33
 Copyright: (c) 2024 Baidu.com, Inc. All Rights Reserved
-Brief: 
+Brief:
 """
 
 from contextvars import ContextVar
@@ -39,7 +39,7 @@ class G:
         state = self._g.get()
         setattr(state, name, value)
 
-    
+
     def clear(self):
         self._g.set(State())
 
