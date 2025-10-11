@@ -12,5 +12,4 @@ Brief:
 
 from .provider import Provider
 from .ernie_provider import ErnieProvider
-from .gemini_provider import GeminiProvider
 from .openai_provider import OpenAIProvider
