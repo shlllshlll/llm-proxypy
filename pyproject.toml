@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "llm-proxypy"
-version = "0.0.9"
+version = "0.0.10"
 authors = [
     {name = "shlll", email = "shlll7347@gmail.com"}
 ]
@@ -14,7 +14,7 @@ description = "llm proxy server"
 dependencies = [
     "pyjwt",
     "pyyaml",
-    # "shutilspy @ git+https://github.com/shlllshlll/shutilspy.git@master"
+    "shutilspy @ https://github.com/shlllshlll/shutilspy/releases/download/v0.0.10/shutilspy-0.0.10-py3-none-any.whl"
 ]
 
 [project.optional-dependencies]
