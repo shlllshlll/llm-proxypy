@@ -30,8 +30,9 @@ class LLMApi(object):
     def __init__(self):
         self.initialized = False
         self._sender = None
+        self.secret: str = ""
 
-    def __get_models(self) -> Dict:
+    def __get_models(self) -> str:
         response_body = {
             "object": "list",
             "data": [],
@@ -105,7 +106,7 @@ class LLMApi(object):
 
     def init(self, conf: Dict, **kwargs) -> None:
         self.conf = conf
-        self.secret = conf.get("secret", None)
+        self.secret = conf.get("secret", "")
         request_timeout = conf.get("request_timeout", 60)
         if self.conf.get("enable", False) == False:
             return
@@ -113,12 +114,12 @@ class LLMApi(object):
         sender_name = self.conf.get("sender", "RequestsSender")
         self._sender = get_class(Sender, sender_name)(request_timeout)
 
-        self.model_provider_dict = {}  # type: dict[str, List[Provider]]
+        self.model_provider_dict: dict[str, List[Provider]] = {}
         for provider_conf in self.conf["provider"]:
             provider_name = provider_conf["type"]
             provider = get_class(Provider, provider_name)(
                 provider_conf, self._sender, **kwargs
-            )  # type: Provider
+            )
             if provider is None:
                 raise Exception(f"provider[{provider_conf['type']}] not found")
             provider.post_init()

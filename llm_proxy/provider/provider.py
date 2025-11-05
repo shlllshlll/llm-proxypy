@@ -25,9 +25,6 @@ from ..sender import ResponseProtocol, Sender
 from ..request_data import g
 from ..param import openai as openai_param
 
-if TYPE_CHECKING:
-    from apscheduler.schedulers.base import BaseScheduler
-
 logger = logging.getLogger(__name__)
 
 
@@ -37,12 +34,11 @@ class LLMError(Exception):
 
 class Provider(object):
     def __init__(
-        self, conf: Dict, sender: Sender, scheduler: Optional["BaseScheduler"]
+        self, conf: Dict, sender: Sender
     ):
         self._request_sender = sender
         self.conf = conf
         self.provider_config = conf.get("config", {})
-        self._schedular = scheduler
         self.models = set()
         for model in conf.get("models", []):
             self.models.add(model)
@@ -57,7 +53,7 @@ class Provider(object):
             self.nominal_models = set(model_prefix + model for model in self.models)
         else:
             self.nominal_models = self.models
-    
+
     def get_real_model(self, model: str) -> str:
         model_prefix = self.provider_config.get("model_prefix", "")
         if len(model_prefix) > 0:
