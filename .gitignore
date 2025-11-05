@@ -5,4 +5,4 @@
 log/
 __pycache__/
 *.ipynb
-llm_proxy/conf
+conf/conf.yml

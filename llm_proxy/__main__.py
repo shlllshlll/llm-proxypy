@@ -14,7 +14,7 @@ import logging
 from logging import StreamHandler
 from logging.handlers import TimedRotatingFileHandler
 import yaml
-import auth, llm
+from llm_proxy import auth, llm
 
 logger = logging.getLogger()
 
@@ -62,14 +62,14 @@ def start_app(args):
             app = flask_server.run_app(args.host, args.port)
         else:
             from llm_proxy import fastapi_server
-            app = fastapi_server.run_app(args.host, args.port)
+            app = fastapi_server.run_app(args.host, args.port, True)
     else:
         if args.framework == 'flask':
             from llm_proxy import flask_server
             app = flask_server.app
         else:
             from llm_proxy import fastapi_server
-            app = fastapi_server.app
+            app = fastapi_server.run_app(args.host, args.port, False)
 
     return app
 
