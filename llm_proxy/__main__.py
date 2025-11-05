@@ -4,7 +4,7 @@
 File: __main__.py
 Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
-Brief: 
+Brief:
 """
 import os
 import sys
@@ -14,8 +14,7 @@ import logging
 from logging import StreamHandler
 from logging.handlers import TimedRotatingFileHandler
 import yaml
-sys.path.append(str(Path(__file__).absolute().parent.parent))
-from llm_proxy import auth, data, llm
+import auth, llm
 
 logger = logging.getLogger()
 
@@ -32,7 +31,7 @@ def start_app(args):
         '[%(asctime)s] %(levelname)s:%(name)s:%(module)s::%(filename)s:%(lineno)d %(message)s'
     )
     # 日志输出到文件，每小时归档
-    log_path = Path(__file__).parent / "log"
+    log_path = Path(args.log_dir)
     if not log_path.exists():
         log_path.mkdir(parents=True)
     log_file = log_path / "server.log"
@@ -71,7 +70,7 @@ def start_app(args):
         else:
             from llm_proxy import fastapi_server
             app = fastapi_server.app
-    
+
     return app
 
 
@@ -86,6 +85,8 @@ if __name__ == '__main__':
     server_parser.add_argument('--port', type=int, default=8006, help='port')
     server_parser.add_argument('--no_debug_server', action='store_false', dest='debug_server', help='disable debug server')
     server_parser.add_argument('--framework', type=str, default='flask', choices=['flask','fastapi'],help='server framework')
+    server_parser.add_argument('--log_dir', type=str, default='./log', help='log path')
+    server_parser.add_argument('--log_level', type=str, default='DEBUG', help='log level')
 
     # auth
     auth_parser = cmd_parsers.add_parser('auth', help='authenticate user')

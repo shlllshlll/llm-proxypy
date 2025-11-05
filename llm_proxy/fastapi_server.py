@@ -8,7 +8,7 @@ Brief:
 """
 
 import traceback
-from typing import Awaitable
+from typing import Awaitable, Callable
 from fastapi import FastAPI, Request, status
 from fastapi.responses import StreamingResponse, Response, JSONResponse
 import uvicorn
@@ -35,8 +35,8 @@ def resp(
 
 
 @app.middleware("http")
-async def check_token(request: Request, call_next: Awaitable[Request]):
-    auth_header = request.headers.get("Authorization")
+async def check_token(request: Request, call_next: Callable[[Request], Awaitable[Response]]):
+    auth_header = request.headers.get("Authorization", "")
     token = data.get_bearer_token(auth_header)
 
     if auth.verify_token(token, LLMApi().secret) is False:
@@ -76,7 +76,7 @@ async def models(request: Request):
 def gen_token(secret: str = ""):
     token = auth.gen_token(secret)
 
-    return resp(data.ErrMsg.OK, "操作成功", token=token)
+    return resp(data.ErrMsg.OK, "操作成功", token=token, status_code=status.HTTP_200_OK)
 
 
 def run_app(host: str, port: int) -> FastAPI:

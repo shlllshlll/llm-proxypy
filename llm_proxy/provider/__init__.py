@@ -11,5 +11,4 @@ Brief:
 """
 
 from .provider import Provider
-from .ernie_provider import ErnieProvider
 from .openai_provider import OpenAIProvider
