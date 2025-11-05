@@ -79,7 +79,7 @@ def gen_token(secret: str = ""):
     return resp(data.ErrMsg.OK, "操作成功", token=token, status_code=status.HTTP_200_OK)
 
 
-def run_app(host: str, port: int) -> FastAPI:
+def run_app(host: str, port: int, reload: bool) -> FastAPI:
     if port > 0:
         uvicorn.run("llm_proxy.fastapi_server:app", host=host, port=port, reload=True)
     return app
