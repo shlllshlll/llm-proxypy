@@ -4,10 +4,10 @@
 File: auth.py
 Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
-Brief: 
+Brief:
 """
 
-from typing import Optional
+from typing import Any, Optional
 import secrets
 import datetime
 import logging
@@ -19,7 +19,7 @@ def gen_secret(secret_len: int) -> str:
     return secrets.token_hex(secret_len)
 
 def gen_token(secrets: str, expire: int = 365 * 24, username: Optional[str] = None) -> str:
-    payload = {
+    payload: dict[str, Any] = {
         'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=expire)
     }
     if username is not None:

@@ -9,7 +9,7 @@ Brief:
 
 import traceback
 from typing import Awaitable, Callable
-from fastapi import FastAPI, Request, status
+from fastapi import APIRouter, Depends, FastAPI, Request, status, HTTPException
 from fastapi.responses import StreamingResponse, Response, JSONResponse
 import uvicorn
 from .llm import LLMApi
@@ -34,20 +34,30 @@ def resp(
     )
 
 
-@app.middleware("http")
-async def check_token(request: Request, call_next: Callable[[Request], Awaitable[Response]]):
+# @app.middleware("http")
+# async def check_token(request: Request, call_next: Callable[[Request], Awaitable[Response]]):
+#     auth_header = request.headers.get("Authorization", "")
+#     token = data.get_bearer_token(auth_header)
+
+#     if auth.verify_token(token, LLMApi().secret) is False:
+#         return resp(
+#             data.ErrMsg.AUTH_ERROR,
+#             "Authorization header missing or incorrect",
+#             status.HTTP_401_UNAUTHORIZED,
+#         )
+#     response = await call_next(request)
+#     return response
+
+async def check_auth(request: Request):
     auth_header = request.headers.get("Authorization", "")
     token = data.get_bearer_token(auth_header)
-
     if auth.verify_token(token, LLMApi().secret) is False:
-        return resp(
-            data.ErrMsg.AUTH_ERROR,
-            "Authorization header missing or incorrect",
-            status.HTTP_401_UNAUTHORIZED,
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization failed"
         )
-    response = await call_next(request)
-    return response
 
+api_no_auth = APIRouter(prefix="", dependencies=[])
+api_auth = APIRouter(prefix="", dependencies=[Depends(check_auth)])
 
 @app.exception_handler(Exception)
 async def handle_error(request: Request, exc: Exception):
@@ -60,20 +70,21 @@ async def handle_error(request: Request, exc: Exception):
     )
 
 
-@app.route("/v1/chat/completions", methods=["POST"])
+@api_auth.post("/v1/chat/completions")
 async def chat(request: Request):
     request_body = await request.json()
     is_stream = request_body.get("stream", False)
     return convert_resonse(await LLMApi().async_chat(request_body), is_stream)
 
 
-@app.route("/v1/models", methods=["POST"])
+@api_no_auth.post("/v1/models")
 async def models(request: Request):
     return convert_resonse(await LLMApi().async_models())
 
 
-@app.route("/gen_token")
+@api_no_auth.post("/gen_token")
 def gen_token(secret: str = ""):
+    print("Generating token with secret:", secret)
     token = auth.gen_token(secret)
 
     return resp(data.ErrMsg.OK, "操作成功", token=token, status_code=status.HTTP_200_OK)
@@ -81,5 +92,8 @@ def gen_token(secret: str = ""):
 
 def run_app(host: str, port: int, reload: bool) -> FastAPI:
     if port > 0:
-        uvicorn.run("llm_proxy.fastapi_server:app", host=host, port=port, reload=True)
+        uvicorn.run("llm_proxy.main:app", host=host, port=port, reload=reload)
     return app
+
+app.include_router(api_no_auth)
+app.include_router(api_auth)
