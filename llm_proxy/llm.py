@@ -30,7 +30,13 @@ class LLMApi(object):
     def __init__(self):
         self.initialized = False
         self._sender = None
-        self.secret: str = ""
+        self._secret: str = ""
+
+    @property
+    def secret(self) -> str:
+        if not self.initialized:
+            raise Exception("LLMApi not initialized")
+        return self._secret
 
     def __get_models(self) -> str:
         response_body = {
@@ -106,7 +112,7 @@ class LLMApi(object):
 
     def init(self, conf: Dict, **kwargs) -> None:
         self.conf = conf
-        self.secret = conf.get("secret", "")
+        self._secret = conf.get("secret", "")
         request_timeout = conf.get("request_timeout", 60)
         if self.conf.get("enable", False) == False:
             return
