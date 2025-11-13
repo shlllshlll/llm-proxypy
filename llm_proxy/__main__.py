@@ -25,7 +25,6 @@ if __name__ == "__main__":
     server_parser.add_argument('--conf', type=str, default='conf/conf.yml', help='llm proxy server conf path')
     server_parser.add_argument('--port', type=int, default=8006, help='port')
     server_parser.add_argument('--no_debug_server', action='store_false', dest='debug_server', help='disable debug server')
-    server_parser.add_argument('--log_dir', type=str, default='./log', help='log path')
     server_parser.add_argument('--log_level', type=str, default='DEBUG', help='log level')
 
     # auth
@@ -60,7 +59,7 @@ if __name__ == "__main__":
                     result = auth.verify_token(args.token, args.secret)
                     print(f'Valid Result: {"Pass" if result else "Fail"}')
         case 'server':
-            settings = ServerSettings(LOG_DIR=args.log_dir, LOG_LEVEL=args.log_level, CONF=args.conf)
+            settings = ServerSettings(LOG_LEVEL=args.log_level, CONF=args.conf)
             fastapi_server.app.state.settings = settings
             init_llm()
             uvicorn.run("llm_proxy.app:app", host=args.host, port=args.port, reload=args.debug_server)
