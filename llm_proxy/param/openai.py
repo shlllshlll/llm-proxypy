@@ -7,35 +7,28 @@ Modified By: shlll(shlll7347@gmail.com)
 Brief:
 """
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Dict, Tuple, Self
+from typing import Any, Optional, Dict, Self
 import uuid
 import time
 import random
 import string
 from enum import Enum
 import hashlib
-from functools import partial
 from .common import *
 
 
-def gen(
-    id: bool = False, created: bool = False, fp: bool = False
-) -> Tuple[str | int] | str | int:
-    result = []
-    if id:
-        result.append(f"chatcmpl-{uuid.uuid4()}")
-    if created:
-        result.append(int(time.time()))
-    if fp:
-        random_string = "".join(
-            random.choices(string.ascii_letters + string.digits, k=16)
-        )
-        fp_str = hashlib.sha1(random_string.encode()).hexdigest()[:10]
-        result.append(f"fp-{fp_str}")
-    if len(result) == 1:
-        return result[0]
-    else:
-        return tuple(result)
+def gen_id():
+    return f"chatcmpl-{uuid.uuid4()}"
+
+
+def gen_created():
+    return int(time.time())
+
+
+def gen_fp():
+    random_string = "".join(random.choices(string.ascii_letters + string.digits, k=16))
+    fp_str = hashlib.sha1(random_string.encode()).hexdigest()[:10]
+    return f"fp-{fp_str}"
 
 
 class FinishReason(Enum):
@@ -98,7 +91,7 @@ class ChatRequest(ParamMixin):
         @dataclass
         class InputAudio:
             data: str
-            format: "ChatRequest.AudioContentPart.Format"
+            format: ChatRequest.AudioContentPart.Format
 
         input_audio: InputAudio
         type: str = "input_audio"
@@ -110,24 +103,19 @@ class ChatRequest(ParamMixin):
 
     @dataclass
     class DeveloperMessage:
-        content: str | List["ChatRequest.TextContentPart"]
+        content: str | list[ChatRequest.TextContentPart]
         role: Role = Role.developer
         name: Hidden[str] = HIDE
 
     @dataclass
     class SystemMessage:
-        content: str | List["ChatRequest.TextContentPart"]
+        content: str | list[ChatRequest.TextContentPart]
         role: Role = Role.system
         name: Hidden[str] = HIDE
 
     @dataclass
     class UserMessage:
-        content: (
-            str
-            | List[
-                "ChatRequest.TextContentPart | ChatRequest.ImageContentPart | ChatRequest.AudioContentPart"
-            ]
-        )
+        content: str | list[ChatRequest.TextContentPart | ChatRequest.ImageContentPart | ChatRequest.AudioContentPart]
         role: Role = Role.user
         name: Hidden[str] = HIDE
 
@@ -146,21 +134,19 @@ class ChatRequest(ParamMixin):
         class ToolCall:
             id: str
             type: str
-            function: "ChatRequest.AssistantMessage.Function"
+            function: ChatRequest.AssistantMessage.Function
 
-        content: (
-            str | List["ChatRequest.TextContentPart | ChatRequest.RefusalContentPart"]
-        )
+        content: str | list[ChatRequest.TextContentPart | ChatRequest.RefusalContentPart]
         refusal: OptionHidden[str] = HIDE
         role: Role = Role.assistant
         name: Hidden[str] = HIDE
         audio: OptionHidden[Audio] = HIDE
-        tool_calls: Hidden[List[ToolCall]] = HIDE
+        tool_calls: Hidden[list[ToolCall]] = HIDE
         function: OptionHidden[Function] = HIDE
 
     @dataclass
     class ToolMessage:
-        content: str | List["ChatRequest.TextContentPart"]
+        content: str | list[ChatRequest.TextContentPart]
         tool_call_id: str
         role: Role = Role.tool
 
@@ -172,7 +158,7 @@ class ChatRequest(ParamMixin):
 
     @dataclass
     class Prediction:
-        content: str | List["ChatRequest.TextContentPart"]
+        content: str | list[ChatRequest.TextContentPart]
         type: str = "content"
 
     @dataclass
@@ -249,8 +235,8 @@ class ChatRequest(ParamMixin):
         parameters: Hidden[Any] = HIDE
 
     model: str
-    messages: List[
-        "DeveloperMessage | SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage"
+    messages: list[
+        DeveloperMessage | SystemMessage | UserMessage | AssistantMessage | ToolMessage | FunctionMessage
     ] = field(default_factory=list)
     store: OptionHidden[bool] = HIDE
     metadata: Hidden[Any] = HIDE
@@ -261,24 +247,24 @@ class ChatRequest(ParamMixin):
     max_tokens: OptionHidden[int] = HIDE
     max_completion_tokens: OptionHidden[int] = HIDE
     n: OptionHidden[int] = HIDE
-    modalities: OptionHidden[List[str]] = HIDE
+    modalities: OptionHidden[list[str]] = HIDE
     prediction: Hidden[Prediction] = HIDE
     audio: OptionHidden[Audio] = HIDE
     presence_penalty: OptionHidden[float] = HIDE
     response_format: Hidden[ResponseFormat] = HIDE
     seed: OptionHidden[int] = HIDE
     service_tier: OptionHidden[str] = HIDE
-    stop: OptionHidden[str | List[str]] = HIDE
+    stop: OptionHidden[str | list[str]] = HIDE
     stream: OptionHidden[bool] = HIDE
     stream_options: OptionHidden[StreamOptions] = HIDE
     temperature: OptionHidden[float] = HIDE
     top_p: OptionHidden[float] = HIDE
-    tools: Hidden[List[Tools]] = HIDE
+    tools: Hidden[list[Tools]] = HIDE
     tool_choice: Hidden[str | ToolChoice] = HIDE
     parallel_tool_calls: Hidden[bool] = HIDE
     user: Hidden[str] = HIDE
     function_call: Hidden[str | FunctionCall] = HIDE
-    functions: Hidden[List[Function]] = HIDE
+    functions: Hidden[list[Function]] = HIDE
 
     @classmethod
     def create(cls, model: str, content: str, *args, **kwargs) -> Self:
@@ -292,15 +278,14 @@ class StreamChatResponse(ParamMixin):
     @dataclass
     class Delta:
         content: OptionHidden[str] = ""
-        reasoning_content: Hidden[str] = HIDE
         function_call: OptionHidden[Function] = HIDE
         role: OptionHidden[ResponseRole] = ResponseRole.assistant
         refusal: OptionHidden[str] = None
-        tool_calls: Hidden[List[ToolCall]] = HIDE
+        tool_calls: Hidden[list[ToolCall]] = HIDE
 
     @dataclass
     class Choice:
-        delta: Union["StreamChatResponse.Delta", dict] = field(default_factory=dict)
+        delta: StreamChatResponse.Delta | dict = field(default_factory=dict)
         logprobs = None
         finish_reason: Optional[FinishReason] = None
         index: int = 0
@@ -312,11 +297,11 @@ class StreamChatResponse(ParamMixin):
         total_tokens: int
 
     model: str
-    id: str = field(default_factory=partial(gen, id=True))
-    choices: List[Choice] = field(default_factory=list)
-    created: int = field(default_factory=partial(gen, created=True))
+    id: str = field(default_factory=gen_id)
+    choices: list[Choice] = field(default_factory=list)
+    created: int = field(default_factory=gen_created)
     service_tier: OptionHidden[str] = HIDE
-    system_fingerprint: str = field(default_factory=partial(gen, fp=True))
+    system_fingerprint: str = field(default_factory=gen_fp)
     object: str = "chat.completion.chunk"
     usage: OptionHidden[Usage] = HIDE
 
@@ -326,11 +311,7 @@ class StreamChatResponse(ParamMixin):
         if content is None:
             obj.choices = [StreamChatResponse.Choice(finish_reason=FinishReason.stop)]
         else:
-            obj.choices = [
-                StreamChatResponse.Choice(
-                    delta=StreamChatResponse.Delta(content=content)
-                )
-            ]
+            obj.choices = [StreamChatResponse.Choice(delta=StreamChatResponse.Delta(content=content))]
         return obj
 
     def to_line(self) -> str:
@@ -357,16 +338,15 @@ class ChatResponse(ParamMixin):
     @dataclass
     class Message:
         content: str
-        reasoning_content: Hidden[str] = HIDE
         refusal: Optional[str] = None
-        tool_calls: Hidden[List[ToolCall]] = HIDE
+        tool_calls: Hidden[list[ToolCall]] = HIDE
         role: str = "assistant"
         function_call: Hidden[Function] = HIDE
         audio: Hidden["ChatResponse.Audio"] = HIDE
 
     @dataclass
     class Choice:
-        message: "ChatResponse.Message"
+        message: ChatResponse.Message
         index: int = 0
         logprobs = None
 
@@ -390,25 +370,21 @@ class ChatResponse(ParamMixin):
         completion_tokens_details: "ChatResponse.CompletionUsage" = field(
             default_factory=lambda: ChatResponse.CompletionUsage()
         )
-        prompt_tokens_details: "ChatResponse.PromptUsage" = field(
-            default_factory=lambda: ChatResponse.PromptUsage()
-        )
+        prompt_tokens_details: "ChatResponse.PromptUsage" = field(default_factory=lambda: ChatResponse.PromptUsage())
 
     model: str
-    id: str = f"chatcmpl-{uuid.uuid4()}"
-    choices: List[Choice] = field(default_factory=list)
-    created: int = int(time.time())
+    id: str = field(default_factory=gen_id)
+    choices: list[Choice] = field(default_factory=list)
+    created: int = field(default_factory=gen_created)
     service_tier: OptionHidden[str] = HIDE
-    system_fingerprint: str = field(default_factory=partial(gen, fp=True))
+    system_fingerprint: str = field(default_factory=gen_fp)
     object: str = "chat.completion"
     usage: Usage = field(default_factory=Usage)
 
     @classmethod
     def create(cls, model: str, content: str, *args, **kwargs) -> Self:
         obj = cls(model, *args, **kwargs)
-        obj.choices = [
-            ChatResponse.Choice(message=ChatResponse.Message(content=content))
-        ]
+        obj.choices = [ChatResponse.Choice(message=ChatResponse.Message(content=content))]
         return obj
 
     to_line = ParamMixin.to_json_str

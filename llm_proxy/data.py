@@ -4,12 +4,14 @@
 File: data.py
 Author: shlll(shlll7347@gmail.com)
 Modified By: shlll(shlll7347@gmail.com)
-Brief: 
+Brief:
 """
 
 from typing import Dict, Optional
 import logging
 from enum import Enum
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class ErrMsg(Enum):
     OK = 0

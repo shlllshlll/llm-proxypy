@@ -8,7 +8,6 @@ Brief:
 """
 
 import logging
-from random import choice
 import json
 from typing import (
     Set,
@@ -17,11 +16,9 @@ from typing import (
     Tuple,
     AsyncGenerator,
     List,
-    TYPE_CHECKING,
-    Optional,
 )
 from shutils import get_caller_class
-from ..sender import ResponseProtocol, Sender
+from ..sender import ResponseProtocol, Sender, StreamResponseProtocol, AStreamResponseProtocol
 from ..request_data import g
 from ..param import openai as openai_param
 
@@ -107,7 +104,7 @@ class Provider(object):
 
     async def async_chat(
         self, request_body: Dict
-    ) -> ResponseProtocol | Generator[str, None, None]:
+    ) -> ResponseProtocol | AsyncGenerator[str, None]:
         url, headers, body = self.__chat_common(request_body)
         return await self.async_do_request(url, headers, body)
 
@@ -118,23 +115,24 @@ class Provider(object):
             url, headers=headers, body=body, stream=g.stream
         )
         if response.ok is False:
-            logger.warn(
+            logger.warning(
                 f"response failed, response code: {response.status_code}, message: {response.text}"
             )
             return response
         if g.stream is True:
+            if not isinstance(response, StreamResponseProtocol):
+                raise ValueError(f"response[{type(response)}] is not StreamResponseProtocol")
 
             def generate():
                 has_done = False
                 g_dict = {}
-                with response as r:
-                    for line in r.iter_lines():
-                        lines, local_has_done = self.__stream_gen_common(line, g_dict)
-                        has_done = local_has_done if not has_done else has_done
-                        for line in lines:
-                            yield line
-                    if not has_done:
-                        yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
+                for line in response.iter_lines():
+                    lines, local_has_done = self.__stream_gen_common(line, g_dict)
+                    has_done = local_has_done if not has_done else has_done
+                    for line in lines:
+                        yield line
+                if not has_done:
+                    yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
 
             return generate()
         else:
@@ -159,23 +157,25 @@ class Provider(object):
             url, headers=headers, body=body, stream=g.stream
         )
         if response.ok is False:
-            logger.warn(
+            logger.warning(
                 f"response failed, response code: {response.status_code}, message: {response.text}"
             )
             return response
         if g.stream is True:
+            if not isinstance(response, AStreamResponseProtocol):
+                raise ValueError(f"response[{type(response)}] is not AStreamResponseProtocol")
 
             async def generate():
                 has_done = False
                 g_dict = {}
-                async with response as r:
-                    async for line in r.aiter_lines():
-                        lines, local_has_done = self.__stream_gen_common(line, g_dict)
-                        has_done = local_has_done if not has_done else has_done
-                        for line in lines:
-                            yield line
-                    if not has_done:
-                        yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
+
+                async for line in response.aiter_lines():
+                    lines, local_has_done = self.__stream_gen_common(line, g_dict)
+                    has_done = local_has_done if not has_done else has_done
+                    for line in lines:
+                        yield line
+                if not has_done:
+                    yield f"{openai_param.StreamChatResponse.end_line()}\n\n"
 
             return generate()
         else:

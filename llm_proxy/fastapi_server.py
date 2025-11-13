@@ -7,16 +7,26 @@ Modified By: shlll(shlll7347@gmail.com)
 Brief:
 """
 
+from contextlib import asynccontextmanager
 import traceback
-from typing import Awaitable, Callable
+import logging
 from fastapi import APIRouter, Depends, FastAPI, Request, status, HTTPException
 from fastapi.responses import StreamingResponse, Response, JSONResponse
 import uvicorn
 from .llm import LLMApi
 from . import sender, data, auth
+from .config import init_logging
+from .settings import ServerSettings
 
-
+logger = logging.getLogger(__name__)
 app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    settings: ServerSettings = app.state.settings
+    init_logging(settings)
+
+    yield
 
 
 def convert_resonse(resp: sender.Response, stream: bool = False) -> Response:
@@ -32,21 +42,6 @@ def resp(
     return JSONResponse(
         content=data.resp(code, msg, *args, **kwargs), status_code=status_code
     )
-
-
-# @app.middleware("http")
-# async def check_token(request: Request, call_next: Callable[[Request], Awaitable[Response]]):
-#     auth_header = request.headers.get("Authorization", "")
-#     token = data.get_bearer_token(auth_header)
-
-#     if auth.verify_token(token, LLMApi().secret) is False:
-#         return resp(
-#             data.ErrMsg.AUTH_ERROR,
-#             "Authorization header missing or incorrect",
-#             status.HTTP_401_UNAUTHORIZED,
-#         )
-#     response = await call_next(request)
-#     return response
 
 async def check_auth(request: Request):
     auth_header = request.headers.get("Authorization", "")
@@ -77,13 +72,13 @@ async def chat(request: Request):
     return convert_resonse(await LLMApi().async_chat(request_body), is_stream)
 
 
-@api_no_auth.post("/v1/models")
+@api_no_auth.get("/v1/models")
 async def models(request: Request):
     return convert_resonse(await LLMApi().async_models())
 
 
-@api_no_auth.post("/gen_token")
-def gen_token(secret: str = ""):
+@api_no_auth.get("/get_token")
+def get_token(secret: str = ""):
     print("Generating token with secret:", secret)
     token = auth.gen_token(secret)
 

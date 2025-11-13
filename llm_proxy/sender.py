@@ -10,18 +10,17 @@ Brief:
 import json
 import logging
 from enum import Enum
-from functools import partial
 from typing import (
     Dict,
-    Any,
     TYPE_CHECKING,
     Protocol,
-    Awaitable,
+    runtime_checkable,
     Iterable,
-    Iterator,
-    AsyncIterator,
+    ContextManager,
+    AsyncContextManager,
+    AsyncGenerator,
     Self,
-    Optional
+    Optional,
 )
 from dataclasses import dataclass, field
 import asyncio
@@ -36,9 +35,9 @@ logger = logging.getLogger(__name__)
 
 HTTP_METHODS = Enum("HttpMethods", ("POST", "GET"))
 
-
+@runtime_checkable
 class ResponseProtocol(Protocol):
-    text: None | str | Iterable[str]
+    text: str | Iterable[str]
     status_code: int
     headers: Dict
 
@@ -50,24 +49,27 @@ class ResponseProtocol(Protocol):
     @property
     def content(self) -> str: ...
 
-
-class StreamResponseProtocol(ResponseProtocol):
+@runtime_checkable
+class StreamResponseProtocol(ResponseProtocol, Protocol):
     def iter_lines(self) -> Iterable[str]: ...
 
-
-class AStreamResponseProtocol(ResponseProtocol):
-    async def aiter_lines(self) -> Awaitable[Iterable[str]]: ...
+@runtime_checkable
+class AStreamResponseProtocol(ResponseProtocol, Protocol):
+    def aiter_lines(self) -> AsyncGenerator[str, None]: ...
 
 
 @dataclass
 class Response:
-    text: None | str | Iterable[str]
+    text: str | Iterable[str]
     status_code: int = 200
     headers: Dict = field(default_factory=dict)
 
     def json(self):
         try:
-            return json.loads(self.text)
+            if type(self.text) is str:
+                return json.loads(self.text)
+            else:
+                raise TypeError(f"Invalid text type[{type(self.text)}] for json deserialization")
         except Exception as e:
             logger.error(e)
             return {}
@@ -79,9 +81,7 @@ class Response:
     @property
     def content(self) -> str:
         if type(self.text) is bytes:
-            return self.text.decode(
-                encoding=self.headers.get("content-encoding", "utf-8")
-            )
+            return self.text.decode(encoding=self.headers.get("content-encoding", "utf-8"))
         elif type(self.text) is str:
             return self.text
         else:
@@ -99,7 +99,7 @@ class Sender(object):
 
     async def async_request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         raise NotImplementedError
 
     def post(
@@ -109,7 +109,7 @@ class Sender(object):
 
     async def async_post(
         self, url: str, headers: Dict, body: Dict, stream: bool = False
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         return await self.async_request(HTTP_METHODS.POST, url, headers, body, stream)
 
     def get(
@@ -119,14 +119,14 @@ class Sender(object):
 
     async def async_get(
         self, url: str, headers: Dict, body: Optional[Dict] = None, stream: bool = False
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         return await self.async_request(HTTP_METHODS.GET, url, headers, body, stream)
 
 
 class RequestsSender(Sender):
     class AsyncStreamContext(Response):
         def __init__(self, response: "requests.Response"):
-            super().__init__("", response.status_code, response.headers)
+            super().__init__("", response.status_code, dict(response.headers))
             self._response = response
 
         async def __aenter__(self):
@@ -149,11 +149,13 @@ class RequestsSender(Sender):
     def request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
     ) -> ResponseProtocol | StreamResponseProtocol:
-        return getattr(self._requests, method.name.lower())(url,  headers=headers, json=body, stream=stream, timeout=self._timeout)
+        return getattr(self._requests, method.name.lower())(
+            url, headers=headers, json=body, stream=stream, timeout=self._timeout
+        )
 
     async def async_request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         resp = await asyncio.to_thread(
             getattr(self._requests, method.name.lower()),
             url,
@@ -212,9 +214,7 @@ class AiohttpSender(Sender):
                     break
 
     class AsyncStreamContext(Response):
-        def __init__(
-            self, method: HTTP_METHODS, session: "aiohttp.ClientSession", url: str, headers: Dict, body: dict
-        ):
+        def __init__(self, method: HTTP_METHODS, session: "aiohttp.ClientSession", url: str, headers: Dict, body: dict):
             import aiohttp
 
             super().__init__("", 200, {})
@@ -244,9 +244,7 @@ class AiohttpSender(Sender):
 
         self._aiohttp = aiohttp
         self._loop = get_event_loop()
-        self._session = self._aiohttp.ClientSession(
-            loop=self._loop, timeout=self._timeout
-        )
+        self._session = self._aiohttp.ClientSession(loop=self._loop, timeout=self._timeout)
 
     def __del__(self) -> None:
         if self._session is not None:
@@ -256,33 +254,31 @@ class AiohttpSender(Sender):
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
     ) -> ResponseProtocol | StreamResponseProtocol:
         if stream:
-            return AiohttpSender.SyncStreamContext(self._session, url, headers, body)
+            return AiohttpSender.SyncStreamContext(method, self._session, url, headers, body)
         else:
-            return self._loop.run_until_complete(self._async_request(url, headers, body))
+            return self._loop.run_until_complete(self._async_request(method, url, headers, body))
 
     async def _async_request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         async with getattr(self._session, method.name.lower())(url, headers=headers, json=body) as response:
             text = await response.text()
             return Response(text, response.status, response.headers)
 
     async def async_request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         async with getattr(self._session, method.name.lower())(url, headers=headers, json=body) as response:
             if stream is False:
                 text = await response.text()
                 return Response(text, response.status, response.headers)
             else:
-                return AiohttpSender.AsyncStreamContext(
-                    method, self._session, url, headers, headers=body
-                )
+                return AiohttpSender.AsyncStreamContext(method, self._session, url, headers, body)
 
 
 class HttpxSender(Sender):
     class SyncStreamContext(Response):
-        def __init__(self, response: "Iterator[httpx.Response]"):
+        def __init__(self, response: "ContextManager[httpx.Response]"):
             super().__init__("", 200, {})
             self._response = response
 
@@ -298,7 +294,7 @@ class HttpxSender(Sender):
                     yield line
 
     class AsyncStreamContext(Response):
-        def __init__(self, response: "Iterator[httpx.Response]"):
+        def __init__(self, response: "AsyncContextManager[httpx.Response]"):
             super().__init__("", 200, {})
             self._response = response
 
@@ -319,7 +315,7 @@ class HttpxSender(Sender):
 
         self._httpx = httpx
         # monkey patch
-        self._httpx.Response.ok = property(
+        self._httpx.Response.ok = property(  # type: ignore[reportAttributeAccessIssue]
             lambda self: not (400 <= self.status_code < 600)
         )
         # sync client
@@ -332,7 +328,7 @@ class HttpxSender(Sender):
             self._client.close()
         if self._async_client is not None:
             loop = get_event_loop()
-            run_coro_in_loop(self._async_client.aclose())
+            run_coro_in_loop(self._async_client.aclose(), loop)
 
     def request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
@@ -340,15 +336,13 @@ class HttpxSender(Sender):
         if self._client is None:
             self._client = self._httpx.Client(timeout=self._timeout)
         if stream:
-            return HttpxSender.SyncStreamContext(
-                self._client.stream(method.name, url, headers=headers, json=body)
-            )
+            return HttpxSender.SyncStreamContext(self._client.stream(method.name, url, headers=headers, json=body))
         else:
-            return self._client.request(method.name, url, headers=headers, json=body)
+            return self._client.request(method.name, url, headers=headers, json=body)  # type: ignore[reportReturnType]
 
     async def async_request(
         self, method: HTTP_METHODS, url: str, headers: Dict, body: Dict, stream: bool
-    ) -> Awaitable[ResponseProtocol | AStreamResponseProtocol]:
+    ) -> ResponseProtocol | AStreamResponseProtocol:
         if self._async_client is None:
             self._async_client = self._httpx.AsyncClient(timeout=self._timeout)
         if stream:
@@ -356,4 +350,4 @@ class HttpxSender(Sender):
                 self._async_client.stream(method.name, url, headers=headers, json=body)
             )
         else:
-            return await self._async_client.request(method.name, url, headers=headers, json=body)
+            return await self._async_client.request(method.name, url, headers=headers, json=body)  # type: ignore[reportReturnType]
