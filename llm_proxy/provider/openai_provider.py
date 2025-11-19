@@ -10,8 +10,11 @@ Copyright: (c) 2025 Baidu.com, Inc. All Rights Reserved
 Brief:
 """
 
+import asyncio
+import threading
 from random import choice
 from typing import Dict, Tuple
+from shutils.cache import TTLCache
 from .provider import Provider
 
 
@@ -20,21 +23,21 @@ class OpenAIProvider(Provider):
         super().__init__(*args, **kwargs)
         if not self.base_url:
             self.base_url = "https://api.openai.com/v1"
-        models_from_api = self.provider_config.get("models_from_api", False)
-        if models_from_api:
-            if isinstance(models_from_api, str):
-                model_url = models_from_api
-            else:
-                model_url = self.base_url + "/models"
+        # refresh every hour
+        self.models_interval = self.provider_config.get("models_interval", 3600)
+        self._models_cache = TTLCache(ttl=self.models_interval)
+        if self.models_interval > 0:
+            self._models_cache.set("model_avaliable", 1)
+        self._models_lock = threading.Lock()
+        self._models_alock = asyncio.Lock()
+        self.models_from_api = self.provider_config.get("models_from_api", False)
+        if self.models_from_api:
+            model_url = self.__get_model_url()
             response = self._request_sender.get(model_url, headers=self.__get_headers())
             if response.status_code != 200:
                 raise Exception(f"Failed to get models from {model_url}")
             models = response.json()
-            if type(models) is list:
-                models_data = models
-            else:
-                models_data = models.get("data", [])
-            self.models = set(model["id"] for model in models_data)
+            self._models = self.__process_response_data(models)
 
     def __get_headers(self):
         return {
@@ -49,3 +52,63 @@ class OpenAIProvider(Provider):
         headers = self.__get_headers()
 
         return url, headers, request_body
+
+
+    def __should_fetch_remote(self) -> bool:
+        if not self.models_from_api:
+            return False
+        elif self.models_interval > 0:
+            if self._models_cache.get("model_avaliable"):
+                return False
+        else:
+            return False
+
+        return True
+
+    def __get_model_url(self) -> str:
+        if isinstance(self.models_from_api, str):
+            return self.models_from_api
+        return self.base_url + "/models"
+
+    def __process_response_data(self, models_data: dict) -> set[str]:
+        """处理 API 返回的数据并更新状态"""
+        raw_list = models_data if isinstance(models_data, list) else models_data.get("data", [])
+        new_models = set(model["id"] for model in raw_list)
+
+        # 更新内存中的数据
+        self._models = new_models
+        self._models_cache.set("model_avaliable", 1)
+
+        return self._models
+
+    def models(self):
+        if not self.__should_fetch_remote():
+            return self._models
+
+        with self._models_lock:
+            # check cache again to avoid duplicate fetch
+            if self._models_cache.get("model_avaliable"):
+                return self._models
+
+            model_url = self.__get_model_url()
+            response = self._request_sender.get(model_url, headers=self.__get_headers())
+            if response.status_code != 200:
+                raise Exception(f"Failed to get models from {model_url}")
+            models = response.json()
+            return self.__process_response_data(models)
+
+    async def async_models(self):
+        if not self.__should_fetch_remote():
+            return self._models
+
+        async with self._models_alock:
+            # check cache again to avoid duplicate fetch
+            if self._models_cache.get("model_avaliable"):
+                return self._models
+
+            model_url = self.__get_model_url()
+            response = await self._request_sender.async_get(model_url, headers=self.__get_headers())
+            if response.status_code != 200:
+                raise Exception(f"Failed to get models from {model_url}")
+            models = response.json()
+            return self.__process_response_data(models)

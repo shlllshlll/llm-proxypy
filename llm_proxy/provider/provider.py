@@ -10,12 +10,14 @@ Brief:
 import logging
 import json
 from typing import (
+    Literal,
     Set,
     Dict,
     Generator,
     Tuple,
     AsyncGenerator,
     List,
+    overload,
 )
 from shutils import get_caller_class
 from ..sender import ResponseProtocol, Sender, StreamResponseProtocol, AStreamResponseProtocol
@@ -36,9 +38,9 @@ class Provider(object):
         self._request_sender = sender
         self.conf = conf
         self.provider_config = conf.get("config", {})
-        self.models = set()
+        self._models = set()
         for model in conf.get("models", []):
-            self.models.add(model)
+            self._models.add(model)
         self.base_url = conf.get("base_url")
         self.token_list = []
         self.token_list.extend(conf.get("tokens", []))
@@ -47,9 +49,9 @@ class Provider(object):
     def post_init(self):
         model_prefix = self.provider_config.get("model_prefix", "")
         if len(model_prefix) > 0:
-            self.nominal_models = set(model_prefix + model for model in self.models)
+            self.nominal_models = set(model_prefix + model for model in self._models)
         else:
-            self.nominal_models = self.models
+            self.nominal_models = self._models
 
     def get_real_model(self, model: str) -> str:
         model_prefix = self.provider_config.get("model_prefix", "")
@@ -101,6 +103,7 @@ class Provider(object):
     def chat(self, request_body: Dict) -> ResponseProtocol | Generator[str, None, None]:
         url, headers, body = self.__chat_common(request_body)
         return self.do_request(url, headers, body)
+
 
     async def async_chat(
         self, request_body: Dict
@@ -221,3 +224,9 @@ class Provider(object):
 
     def parse_stream_chat_response(self, response: str, g_dict: Dict) -> str:
         return response
+
+    def models(self) -> set[str]:
+        return self._models
+
+    async def async_models(self) -> set[str]:
+        return self._models

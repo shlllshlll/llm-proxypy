@@ -16,8 +16,9 @@ import asyncio
 from random import choice
 from typing import Dict, List
 from shutils import singleton
+from shutils.rwlock import RWLock, AsyncRWLock
 from .utils import get_class
-from .sender import Response, Sender
+from .sender import Response, ResponseProtocol, Sender
 from .provider import Provider
 from .request_data import g
 from .param import openai as openai_param
@@ -31,6 +32,8 @@ class LLMApi(object):
         self.initialized = False
         self._sender = None
         self._secret: str = ""
+        self._provider_lock = RWLock()
+        self._provider_alock = AsyncRWLock()
 
     @property
     def secret(self) -> str:
@@ -38,13 +41,13 @@ class LLMApi(object):
             raise Exception("LLMApi not initialized")
         return self._secret
 
-    def __get_models(self) -> str:
+    def __get_models(self, model_list: list[str]) -> str:
         response_body = {
             "object": "list",
             "data": [],
         }
 
-        for model in sorted(LLMApi().model_provider_dict.keys()):
+        for model in sorted(model_list):
             response_body["data"].append(
                 {
                     "id": model,
@@ -58,8 +61,24 @@ class LLMApi(object):
     def __get_provider(self, request_body: Dict) -> Provider:
         model = request_body.get("model", "")
         provider = None
-        if model in self.model_provider_dict:
-            provider = choice(self.model_provider_dict[model])
+        with self._provider_lock.read():
+            if model in self.model_provider_dict:
+                provider = choice(self.model_provider_dict[model])
+        if provider is None:
+            logger.warning(
+                f"no provider found for model {model}"
+            )
+            raise Exception(f"no provider found for model {model}")
+        g.model = provider.get_real_model(model)
+        request_body["model"] = g.model
+        return provider
+
+    async def __get_provider_async(self, request_body: Dict) -> Provider:
+        model = request_body.get("model", "")
+        provider = None
+        async with self._provider_alock.read():
+            if model in self.model_provider_dict:
+                provider = choice(self.model_provider_dict[model])
         if provider is None:
             logger.warning(
                 f"no provider found for model {model}"
@@ -121,6 +140,7 @@ class LLMApi(object):
         self._sender = get_class(Sender, sender_name)(request_timeout)
 
         self.model_provider_dict: dict[str, List[Provider]] = {}
+        self.provider_list: list[Provider] = []
         for provider_conf in self.conf["provider"]:
             provider_name = provider_conf["type"]
             provider = get_class(Provider, provider_name)(
@@ -129,6 +149,7 @@ class LLMApi(object):
             if provider is None:
                 raise Exception(f"provider[{provider_conf['type']}] not found")
             provider.post_init()
+            self.provider_list.append(provider)
             for model in provider.get_models():
                 if model in self.model_provider_dict:
                     self.model_provider_dict[model].append(provider)
@@ -146,45 +167,80 @@ class LLMApi(object):
         except Exception as e:
             return self.__handle_exception(e)
 
-        if inspect.isgenerator(response):
-            return Response(response, headers={"Content-Type": "text/event-stream"})
-        else:
+        if isinstance(response, Response):
+            return response
+        elif isinstance(response, ResponseProtocol):
             return Response(
                 response.content,
                 status_code=response.status_code,
                 headers={"Content-Type": response.headers["Content-Type"]},
             )
+        else:
+            return Response(response, headers={"Content-Type": "text/event-stream"})
 
     @check_init
     async def async_chat(self, request_body: Dict) -> Response:
         g.ori_stream = request_body.get("stream", False)
 
         try:
-            provider = self.__get_provider(request_body)
+            provider = await self.__get_provider_async(request_body)
             response = await provider.async_chat(request_body)
         except Exception as e:
             return self.__handle_exception(e)
 
         if isinstance(response, Response):
             return response
-
-        if inspect.isasyncgen(response):
-            return Response(response, headers={"Content-Type": "text/event-stream"})
-        else:
+        elif isinstance(response, ResponseProtocol):
             return Response(
                 response.content,
                 status_code=response.status_code,
                 headers={"Content-Type": response.headers["Content-Type"]},
             )
+        else:
+            return Response(response, headers={"Content-Type": "text/event-stream"})
 
     @check_init
     def models(self) -> Response:
+        model_list: set[str] = set()
+        model_provider_dict: dict[str, list[Provider]] = {}
+        for provider in self.provider_list:
+            models = provider.get_models()
+            model_list.update(models)
+            for model in models:
+                if model in model_provider_dict:
+                    model_provider_dict[model].append(provider)
+                else:
+                    model_provider_dict[model] = [provider]
+        with self._provider_lock.write():
+            self.model_provider_dict = model_provider_dict
+
+        models_list = set([ model for provider in self.provider_list for model in provider.get_models() ])
         return Response(
-            self.__get_models(),
+            self.__get_models(list(models_list)),
             status_code=200,
             headers={"Content-Type": "application/json"},
         )
 
     @check_init
     async def async_models(self) -> Response:
-        return self.models()
+        tasks = [ provider.async_models() for provider in self.provider_list ]
+        results = await asyncio.gather(*tasks)
+
+        models_list = set()
+        model_provider_dict: dict[str, list[Provider]] = {}
+
+        for models, provider in zip(results, self.provider_list):
+            models_list.update(models)
+            for model in models:
+                if model in model_provider_dict:
+                    model_provider_dict[model].append(provider)
+                else:
+                    model_provider_dict[model] = [provider]
+        async with self._provider_alock.write():
+            self.model_provider_dict = model_provider_dict
+
+        return Response(
+            self.__get_models(list(models_list)),
+            status_code=200,
+            headers={"Content-Type": "application/json"},
+        )
