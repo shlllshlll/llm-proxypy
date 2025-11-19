@@ -16,6 +16,7 @@ from typing import (
     Protocol,
     runtime_checkable,
     Iterable,
+    AsyncIterable,
     ContextManager,
     AsyncContextManager,
     AsyncGenerator,
@@ -60,7 +61,7 @@ class AStreamResponseProtocol(ResponseProtocol, Protocol):
 
 @dataclass
 class Response:
-    text: str | Iterable[str]
+    text: str | Iterable[str] | AsyncIterable[str]
     status_code: int = 200
     headers: Dict = field(default_factory=dict)
 
