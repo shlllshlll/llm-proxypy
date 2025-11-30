@@ -26,4 +26,4 @@ aiohttp = ["aiohttp"]
 fastapi = ["fastapi"]
 
 [tool.setuptools]
-packages = ["llm_proxy", "llm_proxy.param", "llm_proxy.provider"]
+packages = ["llm_proxy", "llm_proxy.param", "llm_proxy.provider", "llm_proxy.servicer"]
