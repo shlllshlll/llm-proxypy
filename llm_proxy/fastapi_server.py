@@ -7,19 +7,23 @@ Modified By: shlll(shlll7347@gmail.com)
 Brief:
 """
 
+import json
 from contextlib import asynccontextmanager
 import traceback
 import logging
 from fastapi import APIRouter, Depends, FastAPI, Request, status, HTTPException
 from fastapi.responses import StreamingResponse, Response, JSONResponse
+from collections.abc import AsyncIterator
 import uvicorn
 from .llm import LLMApi
 from . import sender, data, auth
 from .config import init_logging
 from .settings import ServerSettings
+from .servicer.claude import ClaudeServicer
 
 logger = logging.getLogger(__name__)
 app = FastAPI()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -36,23 +40,20 @@ def convert_resonse(resp: sender.Response, stream: bool = False) -> Response:
         return Response(resp.text, resp.status_code, resp.headers)
 
 
-def resp(
-    code: data.ErrMsg, msg: str, status_code: int, *args, **kwargs
-) -> JSONResponse:
-    return JSONResponse(
-        content=data.resp(code, msg, *args, **kwargs), status_code=status_code
-    )
+def resp(code: data.ErrMsg, msg: str, status_code: int, *args, **kwargs) -> JSONResponse:
+    return JSONResponse(content=data.resp(code, msg, *args, **kwargs), status_code=status_code)
+
 
 async def check_auth(request: Request):
     auth_header = request.headers.get("Authorization", "")
     token = data.get_bearer_token(auth_header)
     if auth.verify_token(token, LLMApi().secret) is False:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization failed"
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authorization failed")
+
 
 api_no_auth = APIRouter(prefix="", dependencies=[])
 api_auth = APIRouter(prefix="", dependencies=[Depends(check_auth)])
+
 
 @app.exception_handler(Exception)
 async def handle_error(request: Request, exc: Exception):
@@ -72,6 +73,32 @@ async def chat(request: Request):
     return convert_resonse(await LLMApi().async_chat(request_body), is_stream)
 
 
+@api_auth.post("/v1/messages")
+async def claude_chat(request: Request):
+    request_body = await request.json()
+    is_stream = request_body.get("stream", False)
+
+    # 使用 ClaudeServicer 进行输入转换
+    model_name = request_body["model"]
+    converted_request = ClaudeServicer.convert_input(request_body)
+    resp = await LLMApi().async_chat(converted_request)
+    print(converted_request)
+    print(resp)
+
+    if not is_stream:
+        if not (type(resp.text) == str or type(resp.text) == bytes):
+            raise ValueError("Expected non-streaming response to be str")
+        response_body = json.loads(resp.text)
+        converted_response = ClaudeServicer.convert_output(response_body)
+        return Response(json.dumps(converted_response), resp.status_code, resp.headers)
+    else:
+        if not isinstance(resp.text, AsyncIterator):
+            raise ValueError("Expected streaming response to be AsyncIterable[str]")
+        return StreamingResponse(
+            ClaudeServicer.convert_output_stream(resp.text, model_name), resp.status_code, resp.headers
+        )
+
+
 @api_no_auth.get("/v1/models")
 async def models(request: Request):
     return convert_resonse(await LLMApi().async_models())
@@ -89,6 +116,7 @@ def run_app(host: str, port: int, reload: bool) -> FastAPI:
     if port > 0:
         uvicorn.run("llm_proxy.main:app", host=host, port=port, reload=reload)
     return app
+
 
 app.include_router(api_no_auth)
 app.include_router(api_auth)

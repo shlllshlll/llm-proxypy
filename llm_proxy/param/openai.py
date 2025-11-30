@@ -285,7 +285,7 @@ class StreamChatResponse(ParamMixin):
 
     @dataclass
     class Choice:
-        delta: StreamChatResponse.Delta | dict = field(default_factory=dict)
+        delta: StreamChatResponse.Delta
         logprobs = None
         finish_reason: Optional[FinishReason] = None
         index: int = 0

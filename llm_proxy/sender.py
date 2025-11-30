@@ -61,7 +61,7 @@ class AStreamResponseProtocol(ResponseProtocol, Protocol):
 
 @dataclass
 class Response:
-    text: str | Iterable[str] | AsyncIterable[str]
+    text: str | bytes | Iterable[str] | AsyncIterable[str]
     status_code: int = 200
     headers: Dict = field(default_factory=dict)
 
