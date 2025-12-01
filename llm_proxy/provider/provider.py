@@ -10,6 +10,7 @@ Brief:
 import logging
 import json
 from typing import (
+    Iterable,
     Literal,
     Set,
     Dict,
@@ -47,11 +48,14 @@ class Provider(object):
         self.modify = conf.get("modify", {})
 
     def post_init(self):
+        self.nominal_models = self._get_nominal_models(self._models)
+
+    def _get_nominal_models(self, models: Iterable[str]) -> Iterable[str]:
         model_prefix = self.provider_config.get("model_prefix", "")
         if len(model_prefix) > 0:
-            self.nominal_models = set(model_prefix + model for model in self._models)
+            return set(model_prefix + model for model in models)
         else:
-            self.nominal_models = self._models
+            return models
 
     def get_real_model(self, model: str) -> str:
         model_prefix = self.provider_config.get("model_prefix", "")
@@ -96,9 +100,6 @@ class Provider(object):
         del response_json["choices"][0]["message"]
         line = json.dumps(response_json, ensure_ascii=False)
         return line
-
-    def get_models(self) -> Set[str]:
-        return self.nominal_models
 
     def chat(self, request_body: Dict) -> ResponseProtocol | Generator[str, None, None]:
         url, headers, body = self.__chat_common(request_body)
@@ -226,7 +227,7 @@ class Provider(object):
         return response
 
     def models(self) -> set[str]:
-        return self._models
+        return self.nominal_models
 
     async def async_models(self) -> set[str]:
-        return self._models
+        return self.nominal_models

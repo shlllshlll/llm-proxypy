@@ -95,7 +95,8 @@ class OpenAIProvider(Provider):
             if response.status_code != 200:
                 raise Exception(f"Failed to get models from {model_url}")
             models = response.json()
-            return self.__process_response_data(models)
+            model_list = self.__process_response_data(models)
+        return self._get_nominal_models(model_list)
 
     async def async_models(self):
         if not self.__should_fetch_remote():
@@ -111,4 +112,6 @@ class OpenAIProvider(Provider):
             if response.status_code != 200:
                 raise Exception(f"Failed to get models from {model_url}")
             models = response.json()
-            return self.__process_response_data(models)
+            model_list = self.__process_response_data(models)
+
+        return self._get_nominal_models(model_list)
