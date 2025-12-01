@@ -83,12 +83,12 @@ class OpenAIProvider(Provider):
 
     def models(self):
         if not self.__should_fetch_remote():
-            return self._models
+            return super().models()
 
         with self._models_lock:
             # check cache again to avoid duplicate fetch
             if self._models_cache.get("model_avaliable"):
-                return self._models
+                return super().models()
 
             model_url = self.__get_model_url()
             response = self._request_sender.get(model_url, headers=self.__get_headers())
@@ -100,12 +100,12 @@ class OpenAIProvider(Provider):
 
     async def async_models(self):
         if not self.__should_fetch_remote():
-            return self._models
+            return await super().async_models()
 
         async with self._models_alock:
             # check cache again to avoid duplicate fetch
             if self._models_cache.get("model_avaliable"):
-                return self._models
+                return self._get_nominal_models(self._models)
 
             model_url = self.__get_model_url()
             response = await self._request_sender.async_get(model_url, headers=self.__get_headers())
