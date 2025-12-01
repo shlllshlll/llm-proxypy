@@ -50,7 +50,7 @@ class Provider(object):
     def post_init(self):
         self.nominal_models = self._get_nominal_models(self._models)
 
-    def _get_nominal_models(self, models: Iterable[str]) -> Iterable[str]:
+    def _get_nominal_models(self, models: set[str]) -> set[str]:
         model_prefix = self.provider_config.get("model_prefix", "")
         if len(model_prefix) > 0:
             return set(model_prefix + model for model in models)
