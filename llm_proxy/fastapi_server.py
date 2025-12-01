@@ -82,8 +82,6 @@ async def claude_chat(request: Request):
     model_name = request_body["model"]
     converted_request = ClaudeServicer.convert_input(request_body)
     resp = await LLMApi().async_chat(converted_request)
-    print(converted_request)
-    print(resp)
 
     if not is_stream:
         if not (type(resp.text) == str or type(resp.text) == bytes):
@@ -106,7 +104,7 @@ async def models(request: Request):
 
 @api_no_auth.get("/get_token")
 def get_token(secret: str = ""):
-    print("Generating token with secret:", secret)
+    logger.info("Generating token with secret:", secret)
     token = auth.gen_token(secret)
 
     return resp(data.ErrMsg.OK, "操作成功", token=token, status_code=status.HTTP_200_OK)
