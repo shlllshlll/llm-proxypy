@@ -60,6 +60,7 @@ class LLMApi(object):
 
     def __get_provider(self, request_body: Dict) -> Provider:
         model = request_body.get("model", "")
+        g.model = model
         provider = None
         with self._provider_lock.read():
             if model in self.model_provider_dict:
@@ -75,6 +76,7 @@ class LLMApi(object):
 
     async def __get_provider_async(self, request_body: Dict) -> Provider:
         model = request_body.get("model", "")
+        g.model = model
         provider = None
         async with self._provider_alock.read():
             if model in self.model_provider_dict:
@@ -150,7 +152,7 @@ class LLMApi(object):
                 raise Exception(f"provider[{provider_conf['type']}] not found")
             provider.post_init()
             self.provider_list.append(provider)
-            for model in provider.get_models():
+            for model in provider.models():
                 if model in self.model_provider_dict:
                     self.model_provider_dict[model].append(provider)
                 else:
@@ -204,7 +206,7 @@ class LLMApi(object):
         model_list: set[str] = set()
         model_provider_dict: dict[str, list[Provider]] = {}
         for provider in self.provider_list:
-            models = provider.get_models()
+            models = provider.models()
             model_list.update(models)
             for model in models:
                 if model in model_provider_dict:
@@ -214,7 +216,7 @@ class LLMApi(object):
         with self._provider_lock.write():
             self.model_provider_dict = model_provider_dict
 
-        models_list = set([ model for provider in self.provider_list for model in provider.get_models() ])
+        models_list = set([ model for provider in self.provider_list for model in provider.models() ])
         return Response(
             self.__get_models(list(models_list)),
             status_code=200,

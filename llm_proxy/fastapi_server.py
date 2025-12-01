@@ -90,7 +90,7 @@ async def claude_chat(request: Request):
             raise ValueError("Expected non-streaming response to be str")
         response_body = json.loads(resp.text)
         converted_response = ClaudeServicer.convert_output(response_body)
-        return Response(json.dumps(converted_response), resp.status_code, resp.headers)
+        return Response(json.dumps(converted_response, ensure_ascii=True), resp.status_code, resp.headers)
     else:
         if not isinstance(resp.text, AsyncIterator):
             raise ValueError("Expected streaming response to be AsyncIterable[str]")

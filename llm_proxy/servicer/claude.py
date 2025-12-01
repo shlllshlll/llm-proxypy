@@ -186,7 +186,7 @@ class ClaudeServicer(Servicer):
                     if current_block_index == 0 and not in_tool_call:
                         yield f"event: content_block_start\ndata: {json.dumps({'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': ''}})}\n\n"
 
-                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': delta.content}})}\n\n"
+                    yield f"event: content_block_delta\ndata: {json.dumps({'type': 'content_block_delta', 'index': 0, 'delta': {'type': 'text_delta', 'text': delta.content}}, ensure_ascii=False)}\n\n"
 
                 # --- B. 处理工具调用 (Tool Calls) ---
                 if type(delta.tool_calls) == list and len(delta.tool_calls) > 0:
