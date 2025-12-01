@@ -51,13 +51,13 @@ if __name__ == "__main__":
             match args.method:
                 case "gen_secret":
                     secret = auth.gen_secret(args.len)
-                    print(f'Secret: {secret}')
+                    logger.info(f'Secret: {secret}')
                 case 'gen_token':
                     token = auth.gen_token(args.secret, args.expire, args.username)
-                    print(f'Token: {token}')
+                    logger.info(f'Token: {token}')
                 case 'valid':
                     result = auth.verify_token(args.token, args.secret)
-                    print(f'Valid Result: {"Pass" if result else "Fail"}')
+                    logger.info(f'Valid Result: {"Pass" if result else "Fail"}')
         case 'server':
             settings = ServerSettings(LOG_LEVEL=args.log_level, CONF=args.conf)
             fastapi_server.app.state.settings = settings
