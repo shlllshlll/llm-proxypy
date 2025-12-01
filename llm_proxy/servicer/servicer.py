@@ -15,14 +15,14 @@ from ..sender import Response
 
 
 class Servicer:
-    @staticmethod
-    def convert_input(request_body: dict) -> dict:
+    def __init__(self, conf: dict):
+        self.servicer_conf = conf.get("servicer", {})
+
+    def convert_input(self, request_body: dict) -> dict:
         ...
 
-    @staticmethod
-    def convert_output(response: dict) -> dict:
+    def convert_output(self, response: dict, model_name: str) -> dict:
         ...
 
-    @staticmethod
-    async def convert_output_stream(response: AsyncIterable[str], model_name: str) -> AsyncGenerator[str]:
+    async def convert_output_stream(self, response: AsyncIterable[str], model_name: str) -> AsyncGenerator[str]:
         yield ""

@@ -61,10 +61,7 @@ class LLMApi(object):
     def __get_provider(self, request_body: Dict) -> Provider:
         model = request_body.get("model", "")
         g.model = model
-        provider = None
-        with self._provider_lock.read():
-            if model in self.model_provider_dict:
-                provider = choice(self.model_provider_dict[model])
+        provider = self.get_provider(model)
         if provider is None:
             logger.warning(
                 f"no provider found for model {model}"
@@ -160,11 +157,19 @@ class LLMApi(object):
         self.initialized = True
 
     @check_init
+    def get_provider(self, model_name: str) -> Provider | None:
+        with self._provider_lock.read():
+            if model_name in self.model_provider_dict:
+                return choice(self.model_provider_dict[model_name])
+        return None
+
+    @check_init
     def chat(self, request_body: Dict) -> Response:
         g.ori_stream = request_body.get("stream", False)
 
         try:
             provider = self.__get_provider(request_body)
+            logger.info(f"[LLMApi.chat] Using provider {provider.__class__.__name__} for model {g.model}")
             response = provider.chat(request_body)
         except Exception as e:
             return self.__handle_exception(e)
@@ -186,6 +191,7 @@ class LLMApi(object):
 
         try:
             provider = await self.__get_provider_async(request_body)
+            logger.info(f"[LLMApi.chat] Using provider {provider.__class__.__name__} for model {g.model}")
             response = await provider.async_chat(request_body)
         except Exception as e:
             return self.__handle_exception(e)

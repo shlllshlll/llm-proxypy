@@ -14,6 +14,8 @@ import uuid
 import json
 import logging
 from typing import AsyncGenerator, AsyncIterable
+import tiktoken
+from llm_proxy.llm import LLMApi
 from shutils.param import dict_to_dataclass
 from ..param.openai import ChatResponse, StreamChatResponse
 from ..sender import Response
@@ -23,15 +25,31 @@ logger = logging.getLogger(__name__)
 
 
 class ClaudeServicer(Servicer):
-    @staticmethod
-    def convert_input(request_body: dict) -> dict:
-        messages = request_body.get("messages", [])
-        system_prompt = request_body.get("system")
+    enc = tiktoken.get_encoding("cl100k_base")
+
+    def __init__(self, conf: dict):
+        super().__init__(conf)
+        self.claude_conf = self.servicer_conf.get("claude", {})
+        self.model_mapping: dict[str, str] = self.claude_conf.get("model_mapping", {})
+
+    def convert_input(self, request_body: dict) -> dict:
+        ori_model = request_body.get("model", "")
+        dst_model = ori_model
+        if ori_model in self.model_mapping:
+            dst_model = self.model_mapping[ori_model]
+        elif "-" in self.model_mapping and LLMApi().get_provider(ori_model) is None:
+            dst_model = self.model_mapping["-"]
+        elif "*" in self.model_mapping:
+            dst_model = self.model_mapping["*"]
+        logger.info(f"[ClaudeServicer.convert_input]: Mapping model {ori_model} to {dst_model}")
+
 
         # 1. message转换
         openai_messages = []
 
         # 1.1 处理 System Prompt (Claude 是顶层参数，OpenAI 是 role: system)
+        messages = request_body.get("messages", [])
+        system_prompt = request_body.get("system")
         if system_prompt:
             openai_messages.append({"role": "system", "content": system_prompt})
 
@@ -91,7 +109,7 @@ class ClaudeServicer(Servicer):
             )
 
         openai_request = {
-            "model": request_body["model"],
+            "model": dst_model,
             "messages": openai_messages,
             "temperature": request_body.get("temperature", 0.7),
             "max_tokens": request_body.get("max_tokens", 2048),
@@ -103,10 +121,11 @@ class ClaudeServicer(Servicer):
             openai_request["tools"] = openai_tools
             openai_request["tool_choice"] = "auto"
 
+        logger.info(f"[ClaudeServicer.convert_input]: model[{ori_model} -> {dst_model}], temp[{openai_request['temperature']}], max_tokens[{openai_request['max_tokens']}], stream[{openai_request['stream']}], tools[{len(openai_tools)}]")
+
         return openai_request
 
-    @staticmethod
-    def convert_output(response: dict) -> dict:
+    def convert_output(self, response: dict, model_name: str) -> dict:
         # Implement conversion logic from internal format to Claude format
         if 'error' in response:
             return {
@@ -144,7 +163,7 @@ class ClaudeServicer(Servicer):
             "type": "message",
             "role": "assistant",
             "content": content_blocks,
-            "model": openai_res.model,
+            "model": model_name,
             "stop_reason": stop_reason,
             "stop_sequence": None,
             "usage": {
@@ -153,8 +172,7 @@ class ClaudeServicer(Servicer):
             },
         }
 
-    @staticmethod
-    async def convert_output_stream(response: AsyncIterable[str], model_name: str) -> AsyncGenerator[str]:
+    async def convert_output_stream(self, response: AsyncIterable[str], model_name: str) -> AsyncGenerator[str]:
         # Implement async conversion logic from internal format to Claude format
         # 1. Message Start
         yield f"event: message_start\ndata: {json.dumps({'type': 'message_start', 'message': {'id': f"msg_{uuid.uuid4()}", 'type': 'message', 'role': 'assistant', 'model': model_name, 'usage': {'input_tokens': 0, 'output_tokens': 0}}})}\n\n"
@@ -248,3 +266,103 @@ class ClaudeServicer(Servicer):
         }
         yield f"event: message_delta\ndata: {json.dumps(msg_delta)}\n\n"
         yield f"event: message_stop\ndata: {json.dumps({'type': 'message_stop'})}\n\n"
+
+    @staticmethod
+    def calculate_token_count_native(
+        request_body: dict
+    ) -> dict[str, int]:
+        messages = request_body.get("messages", [])
+        system = request_body.get("system", None)
+        tools = request_body.get("tools", [])
+
+        """
+        原生 Python 实现的 Token 计数器
+        翻译自 Claude Code Router 的 JS 实现
+        """
+        token_count = 0
+
+        # --- 1. Messages 处理 ---
+        if isinstance(messages, list):
+            for message in messages:
+                content = message.get("content")
+
+                # Case A: content 是纯字符串
+                if isinstance(content, str):
+                    token_count += len(ClaudeServicer.enc.encode(content))
+
+                # Case B: content 是数组 (多模态/工具调用)
+                elif isinstance(content, list):
+                    for part in content:
+                        part_type = part.get("type")
+
+                        if part_type == "text":
+                            text = part.get("text", "")
+                            token_count += len(ClaudeServicer.enc.encode(text))
+
+                        elif part_type == "tool_use":
+                            # JS: JSON.stringify(contentPart.input)
+                            # 注意：必须使用 compact separators 模拟 JS 行为
+                            input_json = json.dumps(
+                                part.get("input"),
+                                separators=(',', ':'),
+                                ensure_ascii=False
+                            )
+                            token_count += len(ClaudeServicer.enc.encode(input_json))
+
+                        elif part_type == "tool_result":
+                            # JS: typeof content === "string" ? content : JSON.stringify(content)
+                            res_content = part.get("content")
+                            if isinstance(res_content, str):
+                                token_count += len(ClaudeServicer.enc.encode(res_content))
+                            else:
+                                res_json = json.dumps(
+                                    res_content,
+                                    separators=(',', ':'),
+                                    ensure_ascii=False
+                                )
+                                token_count += len(ClaudeServicer.enc.encode(res_json))
+
+        # --- 2. System Prompt 处理 ---
+        if isinstance(system, str):
+            token_count += len(ClaudeServicer.enc.encode(system))
+
+        elif isinstance(system, list):
+            for item in system:
+                # JS: if (item.type !== "text") return;
+                if item.get("type") != "text":
+                    continue
+
+                item_text = item.get("text")
+
+                if isinstance(item_text, str):
+                    token_count += len(ClaudeServicer.enc.encode(item_text))
+
+                # JS 逻辑中包含对 text 为数组的防御性处理
+                elif isinstance(item_text, list):
+                    for text_part in item_text:
+                        token_count += len(ClaudeServicer.enc.encode(text_part or ""))
+
+        # --- 3. Tools 处理 ---
+        if tools:
+            for tool in tools:
+                name = tool.get("name", "")
+                description = tool.get("description", "")
+
+                # JS: enc.encode(tool.name + tool.description)
+                # 注意：只有 description 存在时才编码拼接后的字符串，
+                # 但原 JS 逻辑稍微有点隐晦：if (tool.description) { count += encode(name + desc) }
+                # 这意味着如果没有 description，name 也不会被计入这部分（通常 description 必填）
+                if description:
+                    token_count += len(ClaudeServicer.enc.encode(name + description))
+
+                input_schema = tool.get("input_schema")
+                if input_schema:
+                    # JS: JSON.stringify(tool.input_schema)
+                    schema_json = json.dumps(
+                        input_schema,
+                        separators=(',', ':'),
+                        ensure_ascii=False
+                    )
+                    token_count += len(ClaudeServicer.enc.encode(schema_json))
+
+        return { "input_tokens": token_count }

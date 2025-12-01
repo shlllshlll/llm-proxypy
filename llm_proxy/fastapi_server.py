@@ -78,23 +78,31 @@ async def claude_chat(request: Request):
     request_body = await request.json()
     is_stream = request_body.get("stream", False)
 
+    claude_servicer: ClaudeServicer = app.state.claude_servicer
+
     # 使用 ClaudeServicer 进行输入转换
     model_name = request_body["model"]
-    converted_request = ClaudeServicer.convert_input(request_body)
+    converted_request = claude_servicer.convert_input(request_body)
     resp = await LLMApi().async_chat(converted_request)
 
     if not is_stream:
         if not (type(resp.text) == str or type(resp.text) == bytes):
             raise ValueError("Expected non-streaming response to be str")
         response_body = json.loads(resp.text)
-        converted_response = ClaudeServicer.convert_output(response_body)
+        converted_response = claude_servicer.convert_output(response_body, model_name)
         return Response(json.dumps(converted_response, ensure_ascii=True), resp.status_code, resp.headers)
     else:
         if not isinstance(resp.text, AsyncIterator):
             raise ValueError("Expected streaming response to be AsyncIterable[str]")
         return StreamingResponse(
-            ClaudeServicer.convert_output_stream(resp.text, model_name), resp.status_code, resp.headers
+            claude_servicer.convert_output_stream(resp.text, model_name), resp.status_code, resp.headers
         )
+
+@api_auth.post("/v1/messages/count_tokens")
+async def claude_count_tokens(request: Request):
+    request_body = await request.json()
+    token_count_info = ClaudeServicer.calculate_token_count_native(request_body)
+    return JSONResponse(content=token_count_info)
 
 
 @api_no_auth.get("/v1/models")

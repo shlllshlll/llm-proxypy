@@ -25,7 +25,7 @@ if __name__ == "__main__":
     server_parser.add_argument('--conf', type=str, default='conf/conf.yml', help='llm proxy server conf path')
     server_parser.add_argument('--port', type=int, default=8006, help='port')
     server_parser.add_argument('--no_debug_server', action='store_false', dest='debug_server', help='disable debug server')
-    server_parser.add_argument('--log_level', type=str, default='DEBUG', help='log level')
+    server_parser.add_argument('--log_level', type=str, default='INFO', help='log level')
 
     # auth
     auth_parser = cmd_parsers.add_parser('auth', help='authenticate user')

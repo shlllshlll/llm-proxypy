@@ -17,4 +17,4 @@ class ServerSettings(BaseSettings):
     )
 
     CONF: str = Field("conf/conf.yml")
-    LOG_LEVEL: str = Field("WARNING")
+    LOG_LEVEL: str = Field("INFO")
