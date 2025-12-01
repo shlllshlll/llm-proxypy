@@ -12,6 +12,7 @@ import os
 import yaml
 from .settings import ServerSettings
 from . import fastapi_server, llm
+from .servicer.claude import ClaudeServicer
 
 def init_logging(settings: ServerSettings):
     log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
@@ -43,6 +44,10 @@ def init_llm():
     with open(settings.CONF, 'r') as f:
         conf = yaml.safe_load(f)
     llm.LLMApi().init(conf)
+
+    claude_servicer = ClaudeServicer(conf)
+    fastapi_server.app.state.claude_servicer = claude_servicer
+
     secret = conf.get("secret", None)
     if type(secret) is not str:
         raise ValueError("token must be configured and should be a string")
