@@ -17,7 +17,7 @@ dependencies = [
     "uvicorn",
     "gunicorn",
     "tiktoken",
-    "shutilspy @ https://v6.gh-proxy.com/https://github.com/shlllshlll/shutilspy/releases/download/v0.0.11/shutilspy-0.0.11-py3-none-any.whl",
+    "shutilspy",
     "pydantic-settings>=2.0.3",
 ]
 
@@ -29,3 +29,6 @@ fastapi = ["fastapi"]
 
 [tool.setuptools]
 packages = ["llm_proxy", "llm_proxy.param", "llm_proxy.provider", "llm_proxy.servicer"]
+
+[dependency-groups]
+dev = []
