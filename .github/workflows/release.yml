@@ -20,6 +20,11 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/shutilspy
+    permissions:
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -59,6 +64,10 @@ jobs:
       - name: Build wheel
         run: |
           python -m build -nw
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v2
