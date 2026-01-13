@@ -91,7 +91,7 @@ class ChatRequest(ParamMixin):
         @dataclass
         class InputAudio:
             data: str
-            format: ChatRequest.AudioContentPart.Format
+            format: "ChatRequest.AudioContentPart.Format"
 
         input_audio: InputAudio
         type: str = "input_audio"
@@ -103,19 +103,19 @@ class ChatRequest(ParamMixin):
 
     @dataclass
     class DeveloperMessage:
-        content: str | list[ChatRequest.TextContentPart]
+        content: str | list["ChatRequest.TextContentPart"]
         role: Role = Role.developer
         name: Hidden[str] = HIDE
 
     @dataclass
     class SystemMessage:
-        content: str | list[ChatRequest.TextContentPart]
+        content: str | list["ChatRequest.TextContentPart"]
         role: Role = Role.system
         name: Hidden[str] = HIDE
 
     @dataclass
     class UserMessage:
-        content: str | list[ChatRequest.TextContentPart | ChatRequest.ImageContentPart | ChatRequest.AudioContentPart]
+        content: str | list["ChatRequest.TextContentPart | ChatRequest.ImageContentPart | ChatRequest.AudioContentPart"]
         role: Role = Role.user
         name: Hidden[str] = HIDE
 
@@ -134,9 +134,9 @@ class ChatRequest(ParamMixin):
         class ToolCall:
             id: str
             type: str
-            function: ChatRequest.AssistantMessage.Function
+            function: "ChatRequest.AssistantMessage.Function"
 
-        content: str | list[ChatRequest.TextContentPart | ChatRequest.RefusalContentPart]
+        content: str | list["ChatRequest.TextContentPart | ChatRequest.RefusalContentPart"]
         refusal: OptionHidden[str] = HIDE
         role: Role = Role.assistant
         name: Hidden[str] = HIDE
@@ -146,7 +146,7 @@ class ChatRequest(ParamMixin):
 
     @dataclass
     class ToolMessage:
-        content: str | list[ChatRequest.TextContentPart]
+        content: str | list["ChatRequest.TextContentPart"]
         tool_call_id: str
         role: Role = Role.tool
 
@@ -158,7 +158,7 @@ class ChatRequest(ParamMixin):
 
     @dataclass
     class Prediction:
-        content: str | list[ChatRequest.TextContentPart]
+        content: str | list["ChatRequest.TextContentPart"]
         type: str = "content"
 
     @dataclass
@@ -285,8 +285,8 @@ class StreamChatResponse(ParamMixin):
 
     @dataclass
     class Choice:
-        delta: StreamChatResponse.Delta
-        logprobs = None
+        delta: Optional["StreamChatResponse.Delta"] = None
+        logprobs: float = None
         finish_reason: Optional[FinishReason] = None
         index: int = 0
 
@@ -346,7 +346,7 @@ class ChatResponse(ParamMixin):
 
     @dataclass
     class Choice:
-        message: ChatResponse.Message
+        message: "ChatResponse.Message"
         index: int = 0
         logprobs = None
 

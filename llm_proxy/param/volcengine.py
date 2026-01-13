@@ -40,7 +40,7 @@ class StreamChatResponse(openai.StreamChatResponse):
 
     @dataclass
     class Choice(openai.StreamChatResponse.Choice):
-        delta: StreamChatResponse.Delta | dict = field(default_factory=dict)  # type: ignore[reportIncompatibleVariableOverride]
+        delta: "StreamChatResponse.Delta | dict" = field(default_factory=dict)  # type: ignore[reportIncompatibleVariableOverride]
 
     choices: list[Choice] = field(default_factory=list)  # type: ignore[reportIncompatibleVariableOverride]
 
@@ -52,6 +52,6 @@ class ChatResponse(openai.ChatResponse):
 
     @dataclass
     class Choice(openai.ChatResponse.Choice):
-        message: ChatResponse.Message  # type: ignore[reportIncompatibleVariableOverride]
+        message: "ChatResponse.Message"  # type: ignore[reportIncompatibleVariableOverride]
 
     choices: list[Choice] = field(default_factory=list)  # type: ignore[reportIncompatibleVariableOverride]
